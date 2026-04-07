@@ -1,10 +1,12 @@
 // 메인 레이아웃 컴포넌트
-// 왼쪽 사이드바 + 오른쪽 메인 콘텐츠 영역으로 구성됩니다.
-// 사이드바 상태에 따라 콘텐츠 영역 너비가 자동 조절됩니다.
+// 데스크탑: 왼쪽 사이드바 + 오른쪽 메인 콘텐츠
+// 모바일: 상단 헤더 + 메인 콘텐츠 + 하단 탭바
 
 "use client";
 
 import Sidebar from "@/components/layout/Sidebar";
+import MobileHeader from "@/components/layout/MobileHeader";
+import MobileTabBar from "@/components/layout/MobileTabBar";
 import { useUIStore } from "@/stores/uiStore";
 
 interface MainLayoutProps {
@@ -17,17 +19,25 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="flex min-h-screen">
-      {/* 왼쪽 사이드바 */}
+      {/* 데스크탑 전용: 왼쪽 사이드바 (md 이상) */}
       <Sidebar />
-      {/* 메인 콘텐츠 영역 - 사이드바 너비만큼 왼쪽 여백 적용 */}
+
+      {/* 모바일 전용: 상단 헤더 (md 미만) */}
+      <MobileHeader />
+
+      {/* 메인 콘텐츠 영역 */}
       <main
         className={`
           flex-1 transition-all duration-300 ease-in-out
-          ${isSidebarOpen ? "ml-60" : "ml-16"}
+          pt-14 pb-16 md:pt-0 md:pb-0
+          ${isSidebarOpen ? "md:ml-60" : "md:ml-16"}
         `}
       >
         {children}
       </main>
+
+      {/* 모바일 전용: 하단 탭바 (md 미만) */}
+      <MobileTabBar />
     </div>
   );
 }
