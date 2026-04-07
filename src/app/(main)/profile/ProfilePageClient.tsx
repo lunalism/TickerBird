@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Crown,
   Trash2,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
@@ -45,6 +46,7 @@ export default function ProfilePageClient() {
     isLoggedIn,
     displayName,
     avatarUrl,
+    isAdmin,
   } = useAuth();
 
   // 프로필 데이터 상태
@@ -488,6 +490,19 @@ export default function ProfilePageClient() {
           </div>
         </div>
       </section>
+
+      {/* ── 관리자 패널 바로가기 (is_admin = true인 유저에게만 표시) ── */}
+      {isAdmin && (
+        <section className="mb-6">
+          <a
+            href="/admin"
+            className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            <Shield size={20} className="text-amber-500" />
+            <span>관리자 패널</span>
+          </a>
+        </section>
+      )}
 
       {/* ── 2. 활동 통계 섹션 ── */}
       <section className="mb-6">

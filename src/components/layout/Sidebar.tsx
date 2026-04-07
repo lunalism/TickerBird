@@ -16,6 +16,7 @@ import {
   ChevronsRight,
   Settings,
   LogIn,
+  Shield,
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuth } from "@/hooks/useAuth";
@@ -39,8 +40,8 @@ export default function Sidebar() {
   // 전역 상태에서 사이드바 상태를 가져옵니다
   const { isSidebarOpen, toggleSidebar } = useUIStore();
 
-  // Supabase 세션 + profiles 테이블에서 최신 닉네임을 가져옵니다
-  const { isLoading: isAuthLoading, isLoggedIn, displayName, avatarUrl } =
+  // Supabase 세션 + profiles 테이블에서 최신 닉네임과 관리자 여부를 가져옵니다
+  const { isLoading: isAuthLoading, isLoggedIn, displayName, avatarUrl, isAdmin } =
     useAuth();
 
   return (
@@ -116,7 +117,31 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* 하단: 설정 → 로그인/프로필 순서 (다크모드는 설정 페이지로 이동) */}
+      {/* 관리자 메뉴 (is_admin = true인 유저에게만 표시) */}
+      {isAdmin && (
+        <div className="border-t border-border px-2 py-2">
+          <Link
+            href="/admin"
+            className={`
+              flex items-center gap-3 rounded-md px-3 py-2
+              transition-colors duration-150
+              ${
+                pathname.startsWith("/admin")
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              }
+            `}
+            title={!isSidebarOpen ? "관리자 패널" : undefined}
+          >
+            <Shield size={20} className="shrink-0" />
+            {isSidebarOpen && (
+              <span className="truncate text-sm">관리자 패널</span>
+            )}
+          </Link>
+        </div>
+      )}
+
+      {/* 하단: 설정 → 로그인/프로필 순서 */}
       <div className="border-t border-border px-2 py-2 space-y-1">
         {/* 설정 버튼 */}
         <Link

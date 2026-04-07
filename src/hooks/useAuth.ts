@@ -21,6 +21,8 @@ interface AuthState {
   displayName: string;
   // 아바타 URL
   avatarUrl: string;
+  // 관리자 여부
+  isAdmin: boolean;
 }
 
 // profiles 조회 타임아웃 (3초 초과 시 강제로 넘어감)
@@ -30,11 +32,15 @@ export function useAuth(): AuthState {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
+  // 관리자 여부
+  const [isAdmin, setIsAdmin] = useState(false);
   const mountedRef = useRef(true);
 
-  // profiles 테이블에서 display_name을 1회 조회합니다
+  // profiles 테이블에서 display_name, is_admin을 1회 조회합니다
   // 타임아웃을 적용하여 지연/실패 시에도 반드시 반환합니다
-  const fetchProfileName = async (userId: string): Promise<string | null> => {
+  const fetchProfile = async (
+    userId: string
+  ): Promise<{ displayName: string | null; isAdmin: boolean }> => {
     try {
       const supabase = createClient();
 
@@ -42,10 +48,9 @@ export function useAuth(): AuthState {
       const result = await Promise.race([
         supabase
           .from("profiles")
-          .select("display_name")
+          .select("display_name, is_admin")
           .eq("id", userId)
           .single(),
-        // 타임아웃 시 null 반환
         new Promise<{ data: null; error: { message: string } }>((resolve) =>
           setTimeout(
             () => resolve({ data: null, error: { message: "timeout" } }),
@@ -55,7 +60,10 @@ export function useAuth(): AuthState {
       ]);
 
       if (result.data && !result.error) {
-        return result.data.display_name;
+        return {
+          displayName: result.data.display_name,
+          isAdmin: result.data.is_admin ?? false,
+        };
       }
 
       if (result.error) {
@@ -65,7 +73,7 @@ export function useAuth(): AuthState {
       console.error("[useAuth] profiles 조회 예외:", err);
     }
 
-    return null;
+    return { displayName: null, isAdmin: false };
   };
 
   useEffect(() => {
@@ -83,9 +91,10 @@ export function useAuth(): AuthState {
         setUser(currentUser);
 
         if (currentUser) {
-          const name = await fetchProfileName(currentUser.id);
+          const profile = await fetchProfile(currentUser.id);
           if (mountedRef.current) {
-            setProfileDisplayName(name);
+            setProfileDisplayName(profile.displayName);
+            setIsAdmin(profile.isAdmin);
           }
         }
       } catch (err) {
@@ -111,13 +120,15 @@ export function useAuth(): AuthState {
 
       if (currentUser) {
         // 비동기로 profiles 조회 (로딩 상태를 블로킹하지 않음)
-        fetchProfileName(currentUser.id).then((name) => {
+        fetchProfile(currentUser.id).then((profile) => {
           if (mountedRef.current) {
-            setProfileDisplayName(name);
+            setProfileDisplayName(profile.displayName);
+            setIsAdmin(profile.isAdmin);
           }
         });
       } else {
         setProfileDisplayName(null);
+        setIsAdmin(false);
       }
 
       // onAuthStateChange 시점에서는 로딩이 이미 false이므로 별도 처리 불필요
@@ -149,5 +160,6 @@ export function useAuth(): AuthState {
     isLoggedIn: !isLoading && !!user,
     displayName,
     avatarUrl,
+    isAdmin,
   };
 }
