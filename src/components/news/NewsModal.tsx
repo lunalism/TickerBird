@@ -139,50 +139,62 @@ export default function NewsModal() {
             ))}
           </div>
 
-          {/* 원문 보기 토글 */}
-          <div>
-            <button
-              onClick={() => setIsOriginalOpen(!isOriginalOpen)}
-              className="flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          {/* 한국 뉴스: 바로 외부 링크 표시 / 미국 뉴스: 원문 보기 토글 */}
+          {selectedArticle.country === "KR" ? (
+            <a
+              href={selectedArticle.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-foreground/80"
             >
-              {isOriginalOpen ? (
-                <>
-                  원문 접기 <ChevronUp size={14} />
-                </>
-              ) : (
-                <>
-                  원문 보기 <ChevronDown size={14} />
-                </>
-              )}
-            </button>
+              <ExternalLink size={14} />
+              {selectedArticle.source_name}에서 전체 기사 읽기 →
+            </a>
+          ) : (
+            <div>
+              <button
+                onClick={() => setIsOriginalOpen(!isOriginalOpen)}
+                className="flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {isOriginalOpen ? (
+                  <>
+                    원문 접기 <ChevronUp size={14} />
+                  </>
+                ) : (
+                  <>
+                    원문 보기 <ChevronDown size={14} />
+                  </>
+                )}
+              </button>
 
-            {isOriginalOpen && (
-              <div className="mt-3 space-y-3 border-t border-border pt-3">
-                <h2 className="text-base font-semibold text-muted-foreground">
-                  {selectedArticle.title_en}
-                </h2>
-                <div className="space-y-1.5">
-                  {selectedArticle.summary_en.split("\n").map((line, i) => (
-                    <p
-                      key={i}
-                      className="text-sm leading-relaxed text-muted-foreground/80"
-                    >
-                      • {line}
-                    </p>
-                  ))}
+              {isOriginalOpen && (
+                <div className="mt-3 space-y-3 border-t border-border pt-3">
+                  <h2 className="text-base font-semibold text-muted-foreground">
+                    {selectedArticle.title_en}
+                  </h2>
+                  <div className="space-y-1.5">
+                    {selectedArticle.summary_en.split("\n").map((line, i) => (
+                      <p
+                        key={i}
+                        className="text-sm leading-relaxed text-muted-foreground/80"
+                      >
+                        • {line}
+                      </p>
+                    ))}
+                  </div>
+                  <a
+                    href={selectedArticle.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-foreground/80"
+                  >
+                    <ExternalLink size={14} />
+                    {selectedArticle.source_name}에서 전체 기사 읽기 →
+                  </a>
                 </div>
-                <a
-                  href={selectedArticle.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground transition-colors hover:text-foreground/80"
-                >
-                  <ExternalLink size={14} />
-                  {selectedArticle.source_name}에서 전체 기사 읽기 →
-                </a>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* 관련 뉴스 */}
           {relatedArticles.length > 0 && (
