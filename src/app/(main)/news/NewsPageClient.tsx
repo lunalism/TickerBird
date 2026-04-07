@@ -1,20 +1,100 @@
 // 뉴스 페이지 클라이언트 컴포넌트
 // Supabase articles 테이블에서 실제 데이터를 조회합니다.
-// 비로그인 10개, 로그인 50개 표시
+// 이전 스타일 UI: 주요뉴스 + 필터 + 리스트
 
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import Link from "next/link";
+import {
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
-import NewsCard, { type Article } from "@/components/news/NewsCard";
+import type { Article } from "@/components/news/NewsCard";
+
+// ──────────────────────────────────────────────
+// 유틸 함수
+// ──────────────────────────────────────────────
+
+// 상대 시간 포맷 (n분 전, n시간 전, n일 전)
+function formatRelativeTime(dateString: string): string {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / (1000 * 60));
+  const diffHour = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDay = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMin < 60) return `${Math.max(1, diffMin)}분 전`;
+  if (diffHour < 24) return `${diffHour}시간 전`;
+  return `${diffDay}일 전`;
+}
+
+// ──────────────────────────────────────────────
+// 배지 스타일 함수
+// ──────────────────────────────────────────────
+
+// 출처별 배지 스타일 반환
+function getSourceBadgeStyle(source: string): string {
+  switch (source) {
+    case "CNBC":
+      return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+    case "MarketWatch":
+      return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400";
+    case "Investing.com":
+      return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
+    case "네이버":
+      return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+    default:
+      return "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400";
+  }
+}
+
+// 출처별 카테고리 매핑
+function getCategoryFromSource(source: string): { label: string; style: string } {
+  switch (source) {
+    case "CNBC":
+      return {
+        label: "속보",
+        style: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+      };
+    case "MarketWatch":
+      return {
+        label: "시장",
+        style: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+      };
+    case "Investing.com":
+      return {
+        label: "분석",
+        style: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+      };
+    case "네이버":
+      return {
+        label: "종합",
+        style: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
+      };
+    default:
+      return {
+        label: "기타",
+        style: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
+      };
+  }
+}
+
+// ──────────────────────────────────────────────
+// 메인 컴포넌트
+// ──────────────────────────────────────────────
 
 export default function NewsPageClient() {
   // 시장 필터 상태 (전체 / 한국 / 미국)
   const [selectedMarket, setSelectedMarket] = useState<"all" | "KR" | "US">("all");
   // 출처 필터 상태
   const [selectedSource, setSelectedSource] = useState<string>("all");
+  // 주요뉴스 섹션 접기/펼치기 상태
+  const [isFeaturedOpen, setIsFeaturedOpen] = useState(true);
   // 기사 목록
   const [articles, setArticles] = useState<Article[]>([]);
   // 로딩 상태
@@ -69,7 +149,9 @@ export default function NewsPageClient() {
     }
   }, [isAuthLoading, isLoggedIn, selectedMarket, selectedSource]);
 
-  // 비로그인 시 표시 제한
+  // 주요뉴스: 최신 2개
+  const featuredNews = articles.slice(0, 2);
+  // 전체 리스트
   const visibleArticles = articles;
 
   // 전체 로딩 상태 (인증 + 데이터)
@@ -77,7 +159,78 @@ export default function NewsPageClient() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
-      {/* ── 필터 영역 ── */}
+      {/* ── 섹션 1: 오늘의 주요뉴스 ── */}
+      <section className="mb-8">
+        {/* 섹션 헤더 + 접기/펼치기 버튼 */}
+        <button
+          onClick={() => setIsFeaturedOpen(!isFeaturedOpen)}
+          className="mb-4 flex w-full items-center justify-between"
+        >
+          <h2 className="text-lg font-bold text-foreground">
+            🔥 오늘의 주요뉴스
+          </h2>
+          {isFeaturedOpen ? (
+            <ChevronUp size={20} className="text-muted-foreground" />
+          ) : (
+            <ChevronDown size={20} className="text-muted-foreground" />
+          )}
+        </button>
+
+        {/* 주요뉴스 카드 2열 */}
+        {isFeaturedOpen && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {isLoading
+              ? Array.from({ length: 2 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="animate-pulse rounded-lg border border-border bg-card p-4"
+                  >
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="h-4 w-14 rounded bg-muted" />
+                      <div className="h-4 w-10 rounded bg-muted" />
+                    </div>
+                    <div className="mb-2 h-5 w-4/5 rounded bg-muted" />
+                    <div className="h-3 w-16 rounded bg-muted" />
+                  </div>
+                ))
+              : featuredNews.map((news) => {
+                  const category = getCategoryFromSource(news.source_name);
+                  return (
+                    <Link
+                      key={news.id}
+                      href={`/news/${news.id}`}
+                      className="rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20"
+                    >
+                      {/* 배지 + 시간 */}
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-xs font-medium ${getSourceBadgeStyle(news.source_name)}`}
+                          >
+                            {news.source_name}
+                          </span>
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-xs font-medium ${category.style}`}
+                          >
+                            {category.label}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {formatRelativeTime(news.published_at)}
+                        </span>
+                      </div>
+                      {/* 제목 */}
+                      <h3 className="text-sm font-semibold leading-snug text-foreground">
+                        {news.title_ko}
+                      </h3>
+                    </Link>
+                  );
+                })}
+          </div>
+        )}
+      </section>
+
+      {/* ── 섹션 2: 필터 영역 ── */}
       <section className="mb-6 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* 시장 필터 탭 */}
@@ -105,14 +258,19 @@ export default function NewsPageClient() {
             ))}
           </div>
 
-          {/* 새로고침 버튼 */}
-          <button
-            onClick={fetchArticles}
-            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label="새로고침"
-          >
-            <RefreshCw size={16} className={isDataLoading ? "animate-spin" : ""} />
-          </button>
+          {/* 정렬 드롭다운 + 새로고침 버튼 */}
+          <div className="flex items-center gap-2">
+            <select className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground">
+              <option>최신순</option>
+            </select>
+            <button
+              onClick={fetchArticles}
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="새로고침"
+            >
+              <RefreshCw size={16} className={isDataLoading ? "animate-spin" : ""} />
+            </button>
+          </div>
         </div>
 
         {/* 출처 필터 탭 */}
@@ -143,39 +301,68 @@ export default function NewsPageClient() {
         </div>
       </section>
 
-      {/* ── 뉴스 리스트 ── */}
+      {/* ── 섹션 3: 뉴스 리스트 ── */}
       <section>
         {isLoading ? (
           // 로딩 스켈레톤
           <div className="divide-y divide-border">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="animate-pulse px-2 py-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <div className="h-4 w-16 rounded bg-muted" />
-                  <div className="h-4 w-12 rounded bg-muted" />
+                <div className="mb-1 flex items-center gap-2">
+                  <div className="h-4 w-14 rounded bg-muted" />
+                  <div className="h-4 w-10 rounded bg-muted" />
                 </div>
-                <div className="mb-2 h-4 w-3/4 rounded bg-muted" />
-                <div className="space-y-1">
-                  <div className="h-3 w-full rounded bg-muted" />
-                  <div className="h-3 w-5/6 rounded bg-muted" />
-                  <div className="h-3 w-2/3 rounded bg-muted" />
-                </div>
+                <div className="h-4 w-3/4 rounded bg-muted" />
               </div>
             ))}
           </div>
         ) : visibleArticles.length === 0 ? (
-          // 데이터 없을 때
+          // 필터 결과가 없을 때
           <p className="py-12 text-center text-muted-foreground">
-            뉴스가 없습니다.
+            해당 조건에 맞는 뉴스가 없습니다.
           </p>
         ) : (
           <div className="divide-y divide-border">
-            {/* 기사 목록 */}
-            {visibleArticles.map((article) => (
-              <NewsCard key={article.id} article={article} />
-            ))}
+            {/* 뉴스 목록 */}
+            {visibleArticles.map((news) => {
+              const category = getCategoryFromSource(news.source_name);
+              return (
+                <Link
+                  key={news.id}
+                  href={`/news/${news.id}`}
+                  className="flex items-center justify-between gap-3 px-2 py-3 transition-colors hover:bg-accent/50"
+                >
+                  {/* 좌측: 배지들 + 제목 */}
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-1.5">
+                      {/* 출처 배지 */}
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${getSourceBadgeStyle(news.source_name)}`}
+                      >
+                        {news.source_name}
+                      </span>
+                      {/* 카테고리 배지 */}
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${category.style}`}
+                      >
+                        {category.label}
+                      </span>
+                    </div>
+                    {/* 제목만 표시 (요약 없음) */}
+                    <h3 className="truncate text-sm font-semibold leading-snug text-foreground">
+                      {news.title_ko}
+                    </h3>
+                  </div>
 
-            {/* 비로그인 시 로그인 유도 배너 */}
+                  {/* 우측: 발행 시간 */}
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatRelativeTime(news.published_at)}
+                  </span>
+                </Link>
+              );
+            })}
+
+            {/* 비로그인 시: 로그인 유도 배너 */}
             {!isLoggedIn && visibleArticles.length >= 10 && (
               <div className="flex flex-col items-center justify-center py-8">
                 <p className="mb-3 text-sm font-medium text-foreground">
