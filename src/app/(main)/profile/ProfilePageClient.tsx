@@ -36,6 +36,10 @@ export default function ProfilePageClient() {
   const [isSaving, setIsSaving] = useState(false);
   // 로그아웃 처리 중 상태
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  // 토스트 메시지 상태
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  // 아바타 이미지 로드 실패 상태
+  const [avatarError, setAvatarError] = useState(false);
 
   // 비로그인 시 /login으로 리다이렉트
   useEffect(() => {
@@ -84,9 +88,12 @@ export default function ProfilePageClient() {
     user?.email?.split("@")[0] ||
     "사용자";
 
-  // 표시용 아바타 URL
+  // 표시용 아바타 URL (avatar_url > picture > 빈 문자열 순으로 fallback)
   const avatarUrl =
-    profile?.avatar_url || user?.user_metadata?.avatar_url || "";
+    profile?.avatar_url ||
+    user?.user_metadata?.avatar_url ||
+    user?.user_metadata?.picture ||
+    "";
 
   // 구독 등급 표시 텍스트
   const tierLabel = profile?.tier === "premium" ? "Premium" : "Free";
@@ -99,6 +106,12 @@ export default function ProfilePageClient() {
         day: "numeric",
       })
     : "";
+
+  // 토스트 메시지 표시 (3초 후 자동 사라짐)
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // 닉네임 편집 시작
   const handleEditStart = () => {
@@ -121,9 +134,14 @@ export default function ProfilePageClient() {
       );
 
     if (!error) {
+      // 저장 성공: 로컬 상태 업데이트 + 성공 토스트
       setProfile((prev) =>
         prev ? { ...prev, display_name: editName.trim() } : prev
       );
+      showToast("닉네임이 변경되었습니다", "success");
+    } else {
+      // 저장 실패: 에러 토스트
+      showToast("닉네임 변경에 실패했습니다", "error");
     }
 
     setIsSaving(false);
@@ -165,17 +183,18 @@ export default function ProfilePageClient() {
       {/* ── 프로필 섹션 ── */}
       <section className="mb-8 rounded-lg border border-border bg-card p-6">
         <div className="flex items-start gap-5">
-          {/* 아바타 이미지 */}
-          {avatarUrl ? (
+          {/* 아바타 이미지 (Google 프로필 사진, 실패 시 이니셜 폴백) */}
+          {avatarUrl && !avatarError ? (
             <Image
               src={avatarUrl}
               alt={displayName}
               width={72}
               height={72}
               className="h-[72px] w-[72px] shrink-0 rounded-full object-cover"
+              onError={() => setAvatarError(true)}
             />
           ) : (
-            // 기본 아바타 (이니셜)
+            // 기본 아바타 (이니셜) — 이미지 없거나 로드 실패 시
             <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-full bg-accent text-2xl font-bold text-accent-foreground">
               {displayName.charAt(0)}
             </div>
@@ -280,6 +299,19 @@ export default function ProfilePageClient() {
           <span>{isLoggingOut ? "로그아웃 중..." : "로그아웃"}</span>
         </button>
       </section>
+
+      {/* ── 토스트 알림 ── */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 rounded-lg px-4 py-3 text-sm font-medium shadow-lg transition-all ${
+            toast.type === "success"
+              ? "bg-emerald-600 text-white"
+              : "bg-red-600 text-white"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

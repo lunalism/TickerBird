@@ -53,7 +53,8 @@ export default function Sidebar() {
     user?.user_metadata?.name ||
     user?.email?.split("@")[0] ||
     "사용자";
-  const avatarUrl = user?.user_metadata?.avatar_url || "";
+  // Google 프로필 사진 URL (avatar_url > picture 순으로 fallback)
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "";
 
   return (
     <aside
