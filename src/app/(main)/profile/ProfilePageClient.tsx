@@ -40,6 +40,8 @@ export default function ProfilePageClient() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   // 아바타 이미지 로드 실패 상태
   const [avatarError, setAvatarError] = useState(false);
+  // 닉네임 유효성 검사 에러 메시지
+  const [nameError, setNameError] = useState("");
 
   // 비로그인 시 /login으로 리다이렉트
   useEffect(() => {
@@ -113,9 +115,34 @@ export default function ProfilePageClient() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // 닉네임 허용 패턴 (한글, 영문, 숫자, 언더스코어만)
+  const NAME_PATTERN = /^[가-힣a-zA-Z0-9_]+$/;
+
+  // 닉네임 유효성 검사 (실시간)
+  const validateName = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return "닉네임을 입력해주세요";
+    if (trimmed.length < 4) return "닉네임은 4글자 이상이어야 합니다";
+    if (trimmed.length > 16) return "닉네임은 16글자 이하여야 합니다";
+    if (!NAME_PATTERN.test(trimmed))
+      return "한글, 영문, 숫자, _ 만 사용할 수 있습니다";
+    return "";
+  };
+
+  // 저장 버튼 활성화 여부 (에러 없고, 현재 닉네임과 다를 때)
+  const isNameValid =
+    !nameError && editName.trim() !== "" && editName.trim() !== displayName;
+
+  // 닉네임 입력값 변경 핸들러 (실시간 유효성 검사)
+  const handleNameChange = (value: string) => {
+    setEditName(value);
+    setNameError(validateName(value));
+  };
+
   // 닉네임 편집 시작
   const handleEditStart = () => {
     setEditName(displayName);
+    setNameError("");
     setIsEditingName(true);
   };
 
@@ -123,7 +150,7 @@ export default function ProfilePageClient() {
   // 1) auth user_metadata 업데이트 (사이드바 등 즉시 반영)
   // 2) profiles 테이블 upsert (DB 영속 저장)
   const handleEditSave = async () => {
-    if (!user || !editName.trim()) return;
+    if (!user || !isNameValid) return;
     setIsSaving(true);
 
     const trimmedName = editName.trim();
@@ -223,39 +250,51 @@ export default function ProfilePageClient() {
             {/* 닉네임 (인라인 편집) */}
             <div className="flex items-center gap-2">
               {isEditingName ? (
-                // 편집 모드: 입력 필드 + 저장/취소 버튼
-                <>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="rounded-md border border-border bg-background px-2 py-1 text-lg font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleEditSave();
-                      if (e.key === "Escape") handleEditCancel();
-                    }}
-                  />
-                  <button
-                    onClick={handleEditSave}
-                    disabled={isSaving}
-                    className="rounded-md p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                    aria-label="저장"
-                  >
-                    {isSaving ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Check size={16} />
-                    )}
-                  </button>
-                  <button
-                    onClick={handleEditCancel}
-                    className="rounded-md p-1 text-muted-foreground hover:bg-accent"
-                    aria-label="취소"
-                  >
-                    <X size={16} />
-                  </button>
-                </>
+                // 편집 모드: 입력 필드 + 에러 메시지 + 저장/취소 버튼
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => handleNameChange(e.target.value)}
+                      maxLength={17}
+                      className={`rounded-md border bg-background px-2 py-1 text-lg font-semibold text-foreground outline-none focus:ring-2 ${
+                        nameError
+                          ? "border-red-500 focus:ring-red-300"
+                          : "border-border focus:ring-ring"
+                      }`}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && isNameValid) handleEditSave();
+                        if (e.key === "Escape") handleEditCancel();
+                      }}
+                    />
+                    {/* 저장 버튼 (유효하지 않으면 비활성화) */}
+                    <button
+                      onClick={handleEditSave}
+                      disabled={isSaving || !isNameValid}
+                      className="rounded-md p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed dark:hover:bg-emerald-950/30"
+                      aria-label="저장"
+                    >
+                      {isSaving ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Check size={16} />
+                      )}
+                    </button>
+                    <button
+                      onClick={handleEditCancel}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-accent"
+                      aria-label="취소"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  {/* 유효성 검사 에러 메시지 */}
+                  {nameError && (
+                    <p className="text-xs text-red-500">{nameError}</p>
+                  )}
+                </div>
               ) : (
                 // 표시 모드: 닉네임 + 편집 버튼
                 <>
