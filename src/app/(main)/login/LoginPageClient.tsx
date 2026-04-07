@@ -1,6 +1,7 @@
 // 로그인 페이지 클라이언트 컴포넌트
 // Google OAuth를 통한 로그인 기능을 제공합니다.
-// 중앙 정렬 카드 레이아웃, 다크모드 지원
+// 데스크탑: 사이드바 레이아웃 안에서 메인 영역 중앙에 표시
+// 모바일: 전체 영역 중앙에 표시
 
 "use client";
 
@@ -31,7 +32,8 @@ export default function LoginPageClient() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    // 메인 영역 전체를 채우면서 중앙 정렬
+    <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-background px-4 md:min-h-screen">
       {/* 로그인 카드 */}
       <div className="w-full max-w-sm space-y-8 rounded-xl border border-border bg-card p-8 shadow-sm">
         {/* 상단: 로고 및 서비스 소개 */}

@@ -1,6 +1,5 @@
 // 로그인 페이지 (서버 컴포넌트 래퍼)
-// metadata를 export하기 위해 서버 컴포넌트로 유지합니다.
-// 실제 UI는 LoginPageClient에서 렌더링합니다.
+// (main) 그룹 안에 위치하여 데스크탑에서는 사이드바와 함께 표시됩니다.
 
 import type { Metadata } from "next";
 import LoginPageClient from "./LoginPageClient";
