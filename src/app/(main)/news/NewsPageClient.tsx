@@ -92,6 +92,66 @@ function getCategoryFromSource(source: string): { label: string; style: string }
 }
 
 // ──────────────────────────────────────────────
+// 인터리빙 함수
+// ──────────────────────────────────────────────
+
+// 1시간 단위 버킷으로 나눈 뒤, 각 버킷 안에서 소스별 라운드로빈으로 섞습니다.
+function interleaveArticles(articles: Article[]): Article[] {
+  if (articles.length <= 1) return articles;
+
+  // 1시간(ms) 단위로 버킷 키 생성
+  const BUCKET_MS = 60 * 60 * 1000;
+  const bucketMap = new Map<number, Article[]>();
+
+  for (const article of articles) {
+    const key = Math.floor(new Date(article.published_at).getTime() / BUCKET_MS);
+    const bucket = bucketMap.get(key);
+    if (bucket) {
+      bucket.push(article);
+    } else {
+      bucketMap.set(key, [article]);
+    }
+  }
+
+  // 버킷을 최신순으로 정렬
+  const sortedKeys = Array.from(bucketMap.keys()).sort((a, b) => b - a);
+
+  const result: Article[] = [];
+
+  for (const key of sortedKeys) {
+    const bucket = bucketMap.get(key)!;
+
+    // 소스별로 그룹화
+    const bySource = new Map<string, Article[]>();
+    for (const article of bucket) {
+      const group = bySource.get(article.source_name);
+      if (group) {
+        group.push(article);
+      } else {
+        bySource.set(article.source_name, [article]);
+      }
+    }
+
+    // 라운드로빈: 각 소스에서 하나씩 번갈아 뽑기
+    const queues = Array.from(bySource.values());
+    let idx = 0;
+    let remaining = bucket.length;
+    while (remaining > 0) {
+      const queue = queues[idx % queues.length];
+      if (queue.length > 0) {
+        result.push(queue.shift()!);
+        remaining--;
+      }
+      idx++;
+      // 빈 큐만 남으면 다음으로 넘어감
+      if (idx >= queues.length * bucket.length) break;
+    }
+  }
+
+  return result;
+}
+
+// ──────────────────────────────────────────────
 // 메인 컴포넌트
 // ──────────────────────────────────────────────
 
@@ -148,8 +208,10 @@ export default function NewsPageClient() {
         setArticles([]);
         setAllArticles([]);
       } else {
-        setArticles(data ?? []);
-        setAllArticles(data ?? []);
+        // 소스별로 몰리지 않도록 인터리빙 적용
+        const interleaved = interleaveArticles(data ?? []);
+        setArticles(interleaved);
+        setAllArticles(interleaved);
       }
     } catch (error) {
       console.error("기사 조회 예외:", error);
