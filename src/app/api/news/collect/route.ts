@@ -9,9 +9,11 @@ import { translateArticles } from "@/lib/news/claude-translator";
 import type { RawArticle } from "@/lib/news/types";
 
 export async function GET(request: Request) {
-  // 인증: Bearer CRON_SECRET 검증
+  // 인증: Vercel Cron 요청이거나 CRON_SECRET이 맞으면 허용
+  const isVercelCron = request.headers.get("x-vercel-cron") === "1";
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const isManualCall = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+  if (!isVercelCron && !isManualCall) {
     return Response.json({ error: "인증 실패" }, { status: 401 });
   }
 
