@@ -38,8 +38,14 @@ interface ActivityStats {
 
 export default function ProfilePageClient() {
   const router = useRouter();
-  // Supabase 인증 상태
-  const { user, isLoading: isAuthLoading, isLoggedIn } = useAuth();
+  // Supabase 인증 상태 (displayName, avatarUrl은 useAuth에서 profiles 테이블 기반으로 제공)
+  const {
+    user,
+    isLoading: isAuthLoading,
+    isLoggedIn,
+    displayName,
+    avatarUrl,
+  } = useAuth();
 
   // 프로필 데이터 상태
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -102,20 +108,13 @@ export default function ProfilePageClient() {
         .eq("id", user.id)
         .single();
 
-      if (profileData) {
-        setProfile(profileData);
-      } else {
-        // profiles 테이블에 데이터가 없으면 auth 메타데이터로 대체
-        setProfile({
-          display_name:
-            user.user_metadata?.full_name ||
-            user.user_metadata?.name ||
-            null,
-          avatar_url: user.user_metadata?.avatar_url || null,
-          tier: "free",
-          created_at: user.created_at,
-        });
-      }
+      // profiles 테이블 데이터 설정 (없으면 기본값, 닉네임은 useAuth에서 관리)
+      setProfile(profileData ?? {
+        display_name: null,
+        avatar_url: null,
+        tier: "free",
+        created_at: user.created_at,
+      });
 
       // 활동 통계 조회 (각 테이블에서 COUNT, 테이블 없어도 에러 무시)
       const [watchlistRes, postsRes, commentsRes] = await Promise.all([
@@ -145,20 +144,7 @@ export default function ProfilePageClient() {
     fetchData();
   }, [user]);
 
-  // 표시용 이름 (프로필 > 메타데이터 > 이메일 순서로 fallback)
-  const displayName =
-    profile?.display_name ||
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
-    user?.email?.split("@")[0] ||
-    "사용자";
-
-  // 표시용 아바타 URL (avatar_url > picture > 빈 문자열 순으로 fallback)
-  const avatarUrl =
-    profile?.avatar_url ||
-    user?.user_metadata?.avatar_url ||
-    user?.user_metadata?.picture ||
-    "";
+  // displayName, avatarUrl은 useAuth 훅에서 제공 (profiles 테이블 기반)
 
   // 구독 등급
   const tier = profile?.tier || "free";
