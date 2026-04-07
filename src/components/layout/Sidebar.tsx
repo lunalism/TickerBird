@@ -21,6 +21,7 @@ import {
   LogIn,
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { useAuth } from "@/hooks/useAuth";
 
 // 메뉴 아이템 목록 정의
 const menuItems = [
@@ -43,13 +44,16 @@ export default function Sidebar() {
   const { isSidebarOpen, toggleSidebar, isDarkMode, toggleDarkMode } =
     useUIStore();
 
-  // 로그인 상태 (목업, 나중에 실제 연동)
-  const isLoggedIn = false;
-  // 로그인된 유저 정보 (목업)
-  const mockUser = {
-    name: "사용자",
-    avatarUrl: "",
-  };
+  // Supabase 세션에서 실제 로그인 상태를 감지합니다
+  const { user, isLoading: isAuthLoading, isLoggedIn } = useAuth();
+
+  // 유저 표시 정보 (Supabase user_metadata에서 가져옴)
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split("@")[0] ||
+    "사용자";
+  const avatarUrl = user?.user_metadata?.avatar_url || "";
 
   return (
     <aside
@@ -161,31 +165,31 @@ export default function Sidebar() {
           {isSidebarOpen && <span className="text-sm">설정</span>}
         </Link>
 
-        {/* 3. 로그인/프로필 버튼 */}
-        {isLoggedIn ? (
+        {/* 3. 로그인/프로필 버튼 (로딩 중에는 표시하지 않아 깜빡임 방지) */}
+        {isAuthLoading ? null : isLoggedIn ? (
           // 로그인 상태: 아바타 + 닉네임 → /profile
           <Link
             href="/profile"
             className={bottomButtonStyle}
-            title={!isSidebarOpen ? mockUser.name : undefined}
+            title={!isSidebarOpen ? displayName : undefined}
           >
             {/* 아바타 원형 이미지 (이미지 없으면 이니셜 표시) */}
-            {mockUser.avatarUrl ? (
+            {avatarUrl ? (
               <Image
-                src={mockUser.avatarUrl}
-                alt={mockUser.name}
+                src={avatarUrl}
+                alt={displayName}
                 width={20}
                 height={20}
                 className="h-5 w-5 shrink-0 rounded-full object-cover"
               />
             ) : (
               <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-medium text-sidebar-accent-foreground">
-                {mockUser.name.charAt(0)}
+                {displayName.charAt(0)}
               </div>
             )}
             {/* 사이드바 펼쳐졌을 때만 닉네임 표시 */}
             {isSidebarOpen && (
-              <span className="truncate text-sm">{mockUser.name}</span>
+              <span className="truncate text-sm">{displayName}</span>
             )}
           </Link>
         ) : (

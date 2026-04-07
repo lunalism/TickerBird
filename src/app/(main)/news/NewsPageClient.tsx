@@ -11,6 +11,7 @@ import {
   Eye,
   RefreshCw,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 // ──────────────────────────────────────────────
 // 타입 정의
@@ -264,8 +265,8 @@ export default function NewsPageClient() {
   const [selectedCategory, setSelectedCategory] = useState<"all" | "종합" | "속보" | "분석">("all");
   // 주요뉴스 섹션 접기/펼치기 상태
   const [isFeaturedOpen, setIsFeaturedOpen] = useState(true);
-  // 로그인 상태 (목업, 나중에 실제 연동)
-  const isLoggedIn = false;
+  // Supabase 세션에서 실제 로그인 상태를 감지합니다
+  const { isLoggedIn } = useAuth();
 
   // 주요뉴스 (is_featured가 true인 항목)
   const featuredNews = MOCK_NEWS.filter((news) => news.is_featured);
