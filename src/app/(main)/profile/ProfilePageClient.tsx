@@ -324,12 +324,12 @@ export default function ProfilePageClient() {
     setEditName("");
   };
 
-  // 로그아웃 처리
+  // 로그아웃 처리 (로그아웃 후 뉴스 페이지로 이동)
   const handleLogout = async () => {
     setIsLoggingOut(true);
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.replace("/login");
+    router.replace("/news");
   };
 
   // 계정 탈퇴 처리
@@ -349,10 +349,10 @@ export default function ProfilePageClient() {
         throw new Error("계정 삭제 API 호출 실패");
       }
 
-      // 성공 시 로그아웃 후 로그인 페이지로 이동
+      // 성공 시 로그아웃 후 뉴스 페이지로 이동
       const supabase = createClient();
       await supabase.auth.signOut();
-      router.replace("/login");
+      router.replace("/news");
     } catch (error) {
       console.error("계정 탈퇴 실패:", error);
       showToast("계정 탈퇴 중 오류가 발생했습니다", "error");

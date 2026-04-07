@@ -31,16 +31,21 @@ export function useAuth(): AuthState {
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
 
   // profiles 테이블에서 최신 display_name을 가져옵니다
+  // 조회 성공 시 항상 profiles 값을 사용하여 캐시 문제를 방지합니다
   const fetchProfileName = async (userId: string) => {
     const supabase = createClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("display_name")
       .eq("id", userId)
       .single();
 
-    if (data?.display_name) {
+    if (!error && data) {
+      // profiles 테이블에 행이 있으면 display_name 값을 그대로 사용
       setProfileDisplayName(data.display_name);
+    } else {
+      // profiles 테이블 조회 실패 시 null로 설정 (user_metadata fallback)
+      setProfileDisplayName(null);
     }
   };
 
