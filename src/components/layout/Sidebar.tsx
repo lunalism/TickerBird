@@ -62,11 +62,25 @@ export default function Sidebar() {
     >
       {/* 상단: 로고 + 접기/펼치기 버튼 */}
       <div className="flex h-14 items-center justify-between border-b border-border px-3">
-        {/* 사이드바 펼쳐졌을 때만 로고 텍스트 표시 */}
-        {isSidebarOpen && (
-          <span className="text-lg font-bold tracking-tight">
-            🐦 Tickerbird
-          </span>
+        {/* 사이드바 상태에 따라 풀 로고 또는 아이콘 로고 표시 */}
+        {isSidebarOpen ? (
+          <Image
+            src="/images/logo-full.svg"
+            alt="Tickerbird 로고"
+            width={140}
+            height={32}
+            className="shrink-0"
+            priority
+          />
+        ) : (
+          <Image
+            src="/images/logo.svg"
+            alt="Tickerbird 로고"
+            width={28}
+            height={28}
+            className="shrink-0"
+            priority
+          />
         )}
         {/* 사이드바 접기/펼치기 토글 버튼 */}
         <button
