@@ -5,7 +5,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { fetchRssFeeds } from "@/lib/news/rss-parser";
 import { fetchNaverNews } from "@/lib/news/naver-news";
-import { translateArticles } from "@/lib/news/claude-translator";
+import { fetchTrumpPosts } from "@/lib/news/trump-posts";
+import { translateArticles, translateTrumpPosts } from "@/lib/news/claude-translator";
 import type { RawArticle } from "@/lib/news/types";
 
 export async function GET(request: Request) {
@@ -79,13 +80,54 @@ export async function GET(request: Request) {
     }
 
     const savedCount = data?.length ?? 0;
-    console.log(`저장 완료: ${savedCount}건`);
+    console.log(`기사 저장 완료: ${savedCount}건`);
 
-    // 6. 응답
+    // 6. 트럼프 Truth Social 게시물 수집
+    let trumpSaved = 0;
+    try {
+      const rawTrumpPosts = await fetchTrumpPosts();
+      console.log(`트럼프 게시물 수집 완료: ${rawTrumpPosts.length}건`);
+
+      if (rawTrumpPosts.length > 0) {
+        // Claude 번역/요약
+        const translatedTrump = await translateTrumpPosts(rawTrumpPosts);
+        console.log(`트럼프 게시물 번역 완료: ${translatedTrump.length}건`);
+
+        // 원본 데이터와 번역 결과 결합 후 upsert
+        const trumpRows = rawTrumpPosts.map((post) => {
+          const translated = translatedTrump.find((t) => t.post_id === post.post_id);
+          return {
+            post_id: post.post_id,
+            content: post.content,
+            content_ko: translated?.content_ko ?? null,
+            summary_ko: translated?.summary_ko ?? null,
+            post_url: post.post_url,
+            posted_at: post.posted_at,
+          };
+        });
+
+        const { data: trumpData, error: trumpError } = await supabase
+          .from("trump_posts")
+          .upsert(trumpRows, { onConflict: "post_id" })
+          .select("id");
+
+        if (trumpError) {
+          console.error("트럼프 게시물 저장 실패:", trumpError);
+        } else {
+          trumpSaved = trumpData?.length ?? 0;
+          console.log(`트럼프 게시물 저장 완료: ${trumpSaved}건`);
+        }
+      }
+    } catch (error) {
+      console.error("트럼프 게시물 수집 실패:", error);
+    }
+
+    // 7. 응답
     return Response.json({
       success: true,
       collected: uniqueArticles.length,
       saved: savedCount,
+      trump_saved: trumpSaved,
     });
   } catch (error) {
     console.error("뉴스 수집 전체 실패:", error);

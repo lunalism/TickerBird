@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabase/client";
 import { useNewsStore } from "@/stores/newsStore";
 import type { Article } from "@/components/news/NewsCard";
+import type { TrumpPost, FeedItem } from "@/lib/news/types";
 
 // ──────────────────────────────────────────────
 // 유틸 함수
@@ -50,6 +51,8 @@ function getSourceBadgeStyle(source: string): string {
       return "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400";
     case "네이버":
       return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+    case "Truth Social":
+      return "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400";
     default:
       return "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400";
   }
@@ -83,6 +86,11 @@ function getCategoryFromSource(source: string): { label: string; style: string }
         label: "종합",
         style: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
       };
+    case "Truth Social":
+      return {
+        label: "트럼프",
+        style: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+      };
     default:
       return {
         label: "기타",
@@ -95,40 +103,51 @@ function getCategoryFromSource(source: string): { label: string; style: string }
 // 인터리빙 함수
 // ──────────────────────────────────────────────
 
+// FeedItem에서 정렬용 시간 필드 추출
+function getFeedItemTime(item: FeedItem): string {
+  return item.itemType === "trump" ? item.posted_at : item.published_at;
+}
+
+// FeedItem에서 출처명 추출
+function getFeedItemSource(item: FeedItem): string {
+  return item.itemType === "trump" ? "Truth Social" : item.source_name;
+}
+
 // 1시간 단위 버킷으로 나눈 뒤, 각 버킷 안에서 소스별 라운드로빈으로 섞습니다.
-function interleaveArticles(articles: Article[]): Article[] {
-  if (articles.length <= 1) return articles;
+function interleaveFeedItems(items: FeedItem[]): FeedItem[] {
+  if (items.length <= 1) return items;
 
   // 1시간(ms) 단위로 버킷 키 생성
   const BUCKET_MS = 60 * 60 * 1000;
-  const bucketMap = new Map<number, Article[]>();
+  const bucketMap = new Map<number, FeedItem[]>();
 
-  for (const article of articles) {
-    const key = Math.floor(new Date(article.published_at).getTime() / BUCKET_MS);
+  for (const item of items) {
+    const key = Math.floor(new Date(getFeedItemTime(item)).getTime() / BUCKET_MS);
     const bucket = bucketMap.get(key);
     if (bucket) {
-      bucket.push(article);
+      bucket.push(item);
     } else {
-      bucketMap.set(key, [article]);
+      bucketMap.set(key, [item]);
     }
   }
 
   // 버킷을 최신순으로 정렬
   const sortedKeys = Array.from(bucketMap.keys()).sort((a, b) => b - a);
 
-  const result: Article[] = [];
+  const result: FeedItem[] = [];
 
   for (const key of sortedKeys) {
     const bucket = bucketMap.get(key)!;
 
     // 소스별로 그룹화
-    const bySource = new Map<string, Article[]>();
-    for (const article of bucket) {
-      const group = bySource.get(article.source_name);
+    const bySource = new Map<string, FeedItem[]>();
+    for (const item of bucket) {
+      const source = getFeedItemSource(item);
+      const group = bySource.get(source);
       if (group) {
-        group.push(article);
+        group.push(item);
       } else {
-        bySource.set(article.source_name, [article]);
+        bySource.set(source, [item]);
       }
     }
 
@@ -146,13 +165,22 @@ function interleaveArticles(articles: Article[]): Article[] {
   return result;
 }
 
+// FeedItem에서 표시용 제목 추출 (트럼프 게시물은 content_ko 첫 줄, 50자 제한)
+function getFeedItemTitle(item: FeedItem): string {
+  if (item.itemType === "trump") {
+    const firstLine = (item.content_ko || item.content).split("\n")[0];
+    return firstLine.length > 50 ? firstLine.slice(0, 50) + "..." : firstLine;
+  }
+  return item.title_ko;
+}
+
 // ──────────────────────────────────────────────
 // 메인 컴포넌트
 // ──────────────────────────────────────────────
 
 export default function NewsPageClient() {
-  const setSelectedArticle = useNewsStore((s) => s.setSelectedArticle);
-  const setAllArticles = useNewsStore((s) => s.setAllArticles);
+  const setSelectedItem = useNewsStore((s) => s.setSelectedItem);
+  const setAllItems = useNewsStore((s) => s.setAllItems);
 
   // 시장 필터 상태 (전체 / 한국 / 미국)
   const [selectedMarket, setSelectedMarket] = useState<"all" | "KR" | "US">("all");
@@ -160,73 +188,109 @@ export default function NewsPageClient() {
   const [selectedSource, setSelectedSource] = useState<string>("all");
   // 주요뉴스 섹션 접기/펼치기 상태
   const [isFeaturedOpen, setIsFeaturedOpen] = useState(true);
-  // 기사 목록
-  const [articles, setArticles] = useState<Article[]>([]);
+  // 피드 아이템 목록 (뉴스 + 트럼프 게시물)
+  const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   // 로딩 상태
   const [isDataLoading, setIsDataLoading] = useState(true);
 
   // Supabase 세션에서 실제 로그인 상태를 감지합니다
   const { isLoggedIn, isLoading: isAuthLoading } = useAuth();
 
-  // 기사 클릭 핸들러: Zustand에 저장하여 모달 즉시 표시
-  const handleArticleClick = (article: Article) => {
-    setSelectedArticle(article);
+  // 피드 아이템 클릭 핸들러: Zustand에 저장하여 모달 즉시 표시
+  const handleItemClick = (item: FeedItem) => {
+    setSelectedItem(item);
   };
 
-  // 기사 조회
-  const fetchArticles = async () => {
+  // 기사 + 트럼프 게시물 조회
+  const fetchFeedItems = async () => {
     setIsDataLoading(true);
     try {
       const supabase = createClient();
       const limit = isLoggedIn ? 50 : 10;
 
-      let query = supabase
+      // 기사 조회
+      let articlesQuery = supabase
         .from("articles")
         .select("*")
         .order("published_at", { ascending: false })
         .limit(limit);
 
-      // 시장 필터 적용
+      // 시장 필터 적용 (Truth Social 선택 시 기사 조회 스킵)
       if (selectedMarket !== "all") {
-        query = query.eq("country", selectedMarket);
+        articlesQuery = articlesQuery.eq("country", selectedMarket);
       }
 
-      // 출처 필터 적용
-      if (selectedSource !== "all") {
-        query = query.eq("source_name", selectedSource);
+      // 출처 필터 적용 (Truth Social 선택 시 기사 조회 스킵)
+      if (selectedSource !== "all" && selectedSource !== "Truth Social") {
+        articlesQuery = articlesQuery.eq("source_name", selectedSource);
       }
 
-      const { data, error } = await query;
+      // 트럼프 게시물 조회
+      const trumpQuery = supabase
+        .from("trump_posts")
+        .select("*")
+        .order("posted_at", { ascending: false })
+        .limit(10);
 
-      if (error) {
-        console.error("기사 조회 실패:", error);
-        setArticles([]);
-        setAllArticles([]);
-      } else {
-        // 소스별로 몰리지 않도록 인터리빙 적용
-        const interleaved = interleaveArticles(data ?? []);
-        setArticles(interleaved);
-        setAllArticles(interleaved);
+      // 병렬 조회
+      const shouldFetchArticles = selectedSource !== "Truth Social";
+      const shouldFetchTrump =
+        selectedSource === "all" || selectedSource === "Truth Social";
+
+      const [articlesResult, trumpResult] = await Promise.all([
+        shouldFetchArticles ? articlesQuery : Promise.resolve({ data: [], error: null }),
+        shouldFetchTrump ? trumpQuery : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (articlesResult.error) {
+        console.error("기사 조회 실패:", articlesResult.error);
       }
+      if (trumpResult.error) {
+        console.error("트럼프 게시물 조회 실패:", trumpResult.error);
+      }
+
+      // FeedItem으로 변환 후 합치기
+      const articleItems: FeedItem[] = (articlesResult.data ?? []).map(
+        (a: Article) => ({ ...a, itemType: "article" as const })
+      );
+      const trumpItems: FeedItem[] = (trumpResult.data ?? []).map(
+        (t: TrumpPost) => ({ ...t, itemType: "trump" as const })
+      );
+
+      // 시장 필터 적용 (트럼프 게시물은 US로 분류)
+      let allItems = [...articleItems, ...trumpItems];
+      if (selectedMarket === "KR") {
+        allItems = allItems.filter((item) => item.itemType === "article");
+      }
+
+      // 시간순 정렬 후 인터리빙 적용
+      allItems.sort(
+        (a, b) =>
+          new Date(getFeedItemTime(b)).getTime() -
+          new Date(getFeedItemTime(a)).getTime()
+      );
+      const interleaved = interleaveFeedItems(allItems);
+      setFeedItems(interleaved);
+      setAllItems(interleaved);
     } catch (error) {
-      console.error("기사 조회 예외:", error);
-      setArticles([]);
+      console.error("피드 조회 예외:", error);
+      setFeedItems([]);
     } finally {
       setIsDataLoading(false);
     }
   };
 
-  // 인증 로딩 완료 후 기사 조회
+  // 인증 로딩 완료 후 피드 조회
   useEffect(() => {
     if (!isAuthLoading) {
-      fetchArticles();
+      fetchFeedItems();
     }
   }, [isAuthLoading, isLoggedIn, selectedMarket, selectedSource]);
 
   // 주요뉴스: 최신 2개
-  const featuredNews = articles.slice(0, 2);
+  const featuredNews = feedItems.slice(0, 2);
   // 전체 리스트
-  const visibleArticles = articles;
+  const visibleItems = feedItems;
 
   // 전체 로딩 상태 (인증 + 데이터)
   const isLoading = isAuthLoading || isDataLoading;
@@ -268,20 +332,21 @@ export default function NewsPageClient() {
                   </div>
                 ))
               : featuredNews.map((news) => {
-                  const category = getCategoryFromSource(news.source_name);
+                  const sourceName = getFeedItemSource(news);
+                  const category = getCategoryFromSource(sourceName);
                   return (
                     <button
                       key={news.id}
-                      onClick={() => handleArticleClick(news)}
+                      onClick={() => handleItemClick(news)}
                       className="rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-foreground/20"
                     >
                       {/* 배지 + 시간 */}
                       <div className="mb-2 flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                           <span
-                            className={`rounded px-1.5 py-0.5 text-xs font-medium ${getSourceBadgeStyle(news.source_name)}`}
+                            className={`rounded px-1.5 py-0.5 text-xs font-medium ${getSourceBadgeStyle(sourceName)}`}
                           >
-                            {news.source_name}
+                            {sourceName}
                           </span>
                           <span
                             className={`rounded px-1.5 py-0.5 text-xs font-medium ${category.style}`}
@@ -290,12 +355,12 @@ export default function NewsPageClient() {
                           </span>
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {formatRelativeTime(news.published_at)}
+                          {formatRelativeTime(getFeedItemTime(news))}
                         </span>
                       </div>
                       {/* 제목 */}
                       <h3 className="text-sm font-semibold leading-snug text-foreground">
-                        {news.title_ko}
+                        {getFeedItemTitle(news)}
                       </h3>
                     </button>
                   );
@@ -338,7 +403,7 @@ export default function NewsPageClient() {
               <option>최신순</option>
             </select>
             <button
-              onClick={fetchArticles}
+              onClick={fetchFeedItems}
               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="새로고침"
             >
@@ -357,6 +422,7 @@ export default function NewsPageClient() {
               { value: "Investing.com", label: "Investing.com" },
               { value: "Nasdaq", label: "Nasdaq" },
               { value: "네이버", label: "네이버" },
+              { value: "Truth Social", label: "Truth Social" },
             ] as const
           ).map((tab) => (
             <button
@@ -391,20 +457,21 @@ export default function NewsPageClient() {
               </div>
             ))}
           </div>
-        ) : visibleArticles.length === 0 ? (
+        ) : visibleItems.length === 0 ? (
           // 필터 결과가 없을 때
           <p className="py-12 text-center text-muted-foreground">
             해당 조건에 맞는 뉴스가 없습니다.
           </p>
         ) : (
           <div className="divide-y divide-border">
-            {/* 뉴스 목록 */}
-            {visibleArticles.map((news) => {
-              const category = getCategoryFromSource(news.source_name);
+            {/* 뉴스 + 트럼프 게시물 통합 목록 */}
+            {visibleItems.map((news) => {
+              const sourceName = getFeedItemSource(news);
+              const category = getCategoryFromSource(sourceName);
               return (
                 <button
                   key={news.id}
-                  onClick={() => handleArticleClick(news)}
+                  onClick={() => handleItemClick(news)}
                   className="flex w-full items-center justify-between gap-3 px-2 py-3 text-left transition-colors hover:bg-accent/50"
                 >
                   {/* 좌측: 배지들 + 제목 */}
@@ -412,9 +479,9 @@ export default function NewsPageClient() {
                     <div className="mb-1 flex items-center gap-1.5">
                       {/* 출처 배지 */}
                       <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${getSourceBadgeStyle(news.source_name)}`}
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-medium ${getSourceBadgeStyle(sourceName)}`}
                       >
-                        {news.source_name}
+                        {sourceName}
                       </span>
                       {/* 카테고리 배지 */}
                       <span
@@ -423,22 +490,22 @@ export default function NewsPageClient() {
                         {category.label}
                       </span>
                     </div>
-                    {/* 제목만 표시 (요약 없음) */}
+                    {/* 제목 표시 (트럼프 게시물은 content_ko 첫 줄) */}
                     <h3 className="truncate text-sm font-semibold leading-snug text-foreground">
-                      {news.title_ko}
+                      {getFeedItemTitle(news)}
                     </h3>
                   </div>
 
                   {/* 우측: 발행 시간 */}
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatRelativeTime(news.published_at)}
+                    {formatRelativeTime(getFeedItemTime(news))}
                   </span>
                 </button>
               );
             })}
 
             {/* 비로그인 시: 로그인 유도 배너 */}
-            {!isLoggedIn && visibleArticles.length >= 10 && (
+            {!isLoggedIn && visibleItems.length >= 10 && (
               <div className="flex flex-col items-center justify-center py-8">
                 <p className="mb-3 text-sm font-medium text-foreground">
                   더 많은 뉴스를 보려면 로그인하세요

@@ -2,7 +2,7 @@
 // claude-haiku-4-5 모델을 사용하여 비용을 최적화합니다.
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { RawArticle, TranslatedArticle } from "./types";
+import type { RawArticle, TranslatedArticle, RawTrumpPost } from "./types";
 
 const MODEL = "claude-haiku-4-5-20251001";
 const BATCH_SIZE = 5;
@@ -83,6 +83,64 @@ async function translateBatch(
     country: articles[i].country,
     published_at: articles[i].publishedAt,
   }));
+}
+
+// 트럼프 게시물 번역/요약 프롬프트
+const TRUMP_PROMPT = `다음 트럼프 Truth Social 게시물을 처리해줘.
+각 게시물에 대해 JSON 배열로 응답해줘.
+- content_ko: 자연스러운 한국어 번역
+- summary_ko: 한국 투자자 관점의 시장 영향 3줄 요약 (한국어, \\n 구분)
+JSON 배열만 반환하고 다른 텍스트는 포함하지 마.`;
+
+/** 트럼프 게시물 배치를 Claude로 번역/요약합니다 */
+async function translateTrumpBatch(
+  posts: RawTrumpPost[]
+): Promise<Array<{ post_id: string; content_ko: string; summary_ko: string }>> {
+  const contentsText = posts
+    .map((p, i) => `${i + 1}. ${p.content}`)
+    .join("\n");
+
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 4096,
+    messages: [
+      {
+        role: "user",
+        content: `${TRUMP_PROMPT}\n\n${contentsText}`,
+      },
+    ],
+  });
+
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
+  const jsonStr = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const parsed: Array<{ content_ko: string; summary_ko: string }> =
+    JSON.parse(jsonStr);
+
+  return parsed.map((item, i) => ({
+    post_id: posts[i].post_id,
+    content_ko: item.content_ko,
+    summary_ko: item.summary_ko,
+  }));
+}
+
+/** 트럼프 게시물을 배치로 나누어 번역/요약합니다 */
+export async function translateTrumpPosts(
+  posts: RawTrumpPost[]
+): Promise<Array<{ post_id: string; content_ko: string; summary_ko: string }>> {
+  const batches = chunk(posts, BATCH_SIZE);
+  const results: Array<{ post_id: string; content_ko: string; summary_ko: string }> = [];
+
+  for (const batch of batches) {
+    try {
+      const translated = await translateTrumpBatch(batch);
+      results.push(...translated);
+    } catch (error) {
+      console.error("트럼프 게시물 번역 배치 처리 실패:", error);
+    }
+  }
+
+  return results;
 }
 
 /** 전체 기사를 배치로 나누어 번역/요약합니다 */
