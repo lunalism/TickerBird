@@ -122,7 +122,7 @@ export default function ProfilePageClient() {
   const validateName = (value: string): string => {
     const trimmed = value.trim();
     if (!trimmed) return "닉네임을 입력해주세요";
-    if (trimmed.length < 4) return "닉네임은 4글자 이상이어야 합니다";
+    if (trimmed.length < 2) return "닉네임은 2글자 이상이어야 합니다";
     if (trimmed.length > 16) return "닉네임은 16글자 이하여야 합니다";
     if (!NAME_PATTERN.test(trimmed))
       return "한글, 영문, 숫자, _ 만 사용할 수 있습니다";
