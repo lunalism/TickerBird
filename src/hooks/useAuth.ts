@@ -23,6 +23,8 @@ interface AuthState {
   avatarUrl: string;
   // 관리자 여부
   isAdmin: boolean;
+  // 구독 등급 (free / premium)
+  tier: string;
 }
 
 // profiles 조회 타임아웃 (3초 초과 시 강제로 넘어감)
@@ -34,13 +36,15 @@ export function useAuth(): AuthState {
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
   // 관리자 여부
   const [isAdmin, setIsAdmin] = useState(false);
+  // 구독 등급
+  const [tier, setTier] = useState("free");
   const mountedRef = useRef(true);
 
   // profiles 테이블에서 display_name, is_admin을 1회 조회합니다
   // 타임아웃을 적용하여 지연/실패 시에도 반드시 반환합니다
   const fetchProfile = async (
     userId: string
-  ): Promise<{ displayName: string | null; isAdmin: boolean }> => {
+  ): Promise<{ displayName: string | null; isAdmin: boolean; tier: string }> => {
     try {
       const supabase = createClient();
 
@@ -48,7 +52,7 @@ export function useAuth(): AuthState {
       const result = await Promise.race([
         supabase
           .from("profiles")
-          .select("display_name, is_admin")
+          .select("display_name, is_admin, tier")
           .eq("id", userId)
           .single(),
         new Promise<{ data: null; error: { message: string } }>((resolve) =>
@@ -63,6 +67,7 @@ export function useAuth(): AuthState {
         return {
           displayName: result.data.display_name,
           isAdmin: result.data.is_admin ?? false,
+          tier: result.data.tier ?? "free",
         };
       }
 
@@ -73,7 +78,7 @@ export function useAuth(): AuthState {
       console.error("[useAuth] profiles 조회 예외:", err);
     }
 
-    return { displayName: null, isAdmin: false };
+    return { displayName: null, isAdmin: false, tier: "free" };
   };
 
   useEffect(() => {
@@ -95,6 +100,7 @@ export function useAuth(): AuthState {
           if (mountedRef.current) {
             setProfileDisplayName(profile.displayName);
             setIsAdmin(profile.isAdmin);
+            setTier(profile.tier);
           }
         }
       } catch (err) {
@@ -124,11 +130,13 @@ export function useAuth(): AuthState {
           if (mountedRef.current) {
             setProfileDisplayName(profile.displayName);
             setIsAdmin(profile.isAdmin);
+            setTier(profile.tier);
           }
         });
       } else {
         setProfileDisplayName(null);
         setIsAdmin(false);
+        setTier("free");
       }
 
       // onAuthStateChange 시점에서는 로딩이 이미 false이므로 별도 처리 불필요
@@ -161,5 +169,6 @@ export function useAuth(): AuthState {
     displayName,
     avatarUrl,
     isAdmin,
+    tier,
   };
 }

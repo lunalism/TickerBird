@@ -47,6 +47,7 @@ export default function ProfilePageClient() {
     displayName,
     avatarUrl,
     isAdmin,
+    tier,
   } = useAuth();
 
   // 프로필 데이터 상태
@@ -148,8 +149,7 @@ export default function ProfilePageClient() {
 
   // displayName, avatarUrl은 useAuth 훅에서 제공 (profiles 테이블 기반)
 
-  // 구독 등급
-  const tier = profile?.tier || "free";
+  // 구독 등급 (useAuth 훅에서 profiles 테이블 기반으로 제공)
   const tierLabel = tier === "premium" ? "Premium" : "Free";
   const isPremium = tier === "premium";
 
