@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { LogOut, Pencil, Check, X, Loader2 } from "lucide-react";
@@ -42,6 +42,10 @@ export default function ProfilePageClient() {
   const [avatarError, setAvatarError] = useState(false);
   // 닉네임 유효성 검사 에러 메시지
   const [nameError, setNameError] = useState("");
+  // 닉네임 중복 체크 상태: "idle" | "checking" | "available" | "duplicate"
+  const [dupStatus, setDupStatus] = useState<"idle" | "checking" | "available" | "duplicate">("idle");
+  // debounce 타이머 ref
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 비로그인 시 /login으로 리다이렉트
   useEffect(() => {
@@ -129,20 +133,76 @@ export default function ProfilePageClient() {
     return "";
   };
 
-  // 저장 버튼 활성화 여부 (에러 없고, 현재 닉네임과 다를 때)
+  // 저장 버튼 활성화 여부 (에러 없고, 현재 닉네임과 다르고, 중복 아닐 때)
   const isNameValid =
-    !nameError && editName.trim() !== "" && editName.trim() !== displayName;
+    !nameError &&
+    editName.trim() !== "" &&
+    editName.trim() !== displayName &&
+    dupStatus === "available";
 
-  // 닉네임 입력값 변경 핸들러 (실시간 유효성 검사)
+  // Supabase에서 닉네임 중복 여부를 확인합니다 (본인 제외)
+  const checkDuplicate = useCallback(
+    async (name: string) => {
+      if (!user) return;
+      setDupStatus("checking");
+
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("display_name", name)
+        .neq("id", user.id)
+        .limit(1);
+
+      if (error) {
+        console.error("닉네임 중복 체크 실패:", error);
+        // 에러 시 사용 가능으로 처리 (저장 시 다시 검증됨)
+        setDupStatus("available");
+        return;
+      }
+
+      setDupStatus(data && data.length > 0 ? "duplicate" : "available");
+    },
+    [user]
+  );
+
+  // 닉네임 입력값 변경 핸들러 (실시간 유효성 검사 + debounce 중복 체크)
   const handleNameChange = (value: string) => {
     setEditName(value);
-    setNameError(validateName(value));
+    const error = validateName(value);
+    setNameError(error);
+
+    // 기존 debounce 타이머 해제
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    // 유효성 검사 통과 + 현재 닉네임과 다를 때만 중복 체크
+    const trimmed = value.trim();
+    if (!error && trimmed && trimmed !== displayName) {
+      setDupStatus("checking");
+      // 500ms debounce 후 중복 체크 실행
+      debounceRef.current = setTimeout(() => {
+        checkDuplicate(trimmed);
+      }, 500);
+    } else {
+      // 유효하지 않거나 현재와 같으면 중복 체크 초기화
+      setDupStatus("idle");
+    }
   };
+
+  // 컴포넌트 언마운트 시 debounce 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   // 닉네임 편집 시작
   const handleEditStart = () => {
     setEditName(displayName);
     setNameError("");
+    setDupStatus("idle");
     setIsEditingName(true);
   };
 
@@ -293,6 +353,16 @@ export default function ProfilePageClient() {
                   {/* 유효성 검사 에러 메시지 */}
                   {nameError && (
                     <p className="text-xs text-red-500">{nameError}</p>
+                  )}
+                  {/* 닉네임 중복 체크 상태 메시지 */}
+                  {!nameError && dupStatus === "checking" && (
+                    <p className="text-xs text-muted-foreground">확인 중...</p>
+                  )}
+                  {!nameError && dupStatus === "duplicate" && (
+                    <p className="text-xs text-red-500">이미 사용 중인 닉네임입니다</p>
+                  )}
+                  {!nameError && dupStatus === "available" && editName.trim() !== displayName && (
+                    <p className="text-xs text-emerald-600">사용 가능한 닉네임입니다</p>
                   )}
                 </div>
               ) : (
