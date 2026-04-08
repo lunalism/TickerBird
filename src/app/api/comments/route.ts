@@ -48,9 +48,10 @@ export async function POST(request: Request) {
   }
 
   // 대상 게시글 존재 및 삭제 여부 확인
+  // (comment_count는 RPC가 원자적으로 갱신하므로 더 이상 select하지 않음)
   const { data: post, error: postError } = await supabase
     .from("posts")
-    .select("id, comment_count, is_deleted")
+    .select("id, is_deleted")
     .eq("id", postId)
     .single();
 
@@ -99,11 +100,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "작성 실패" }, { status: 500 });
   }
 
-  // 게시글의 댓글 수 증가 (실패해도 댓글 자체는 생성된 상태이므로 로깅만)
-  const { error: countError } = await supabase
-    .from("posts")
-    .update({ comment_count: post.comment_count + 1 })
-    .eq("id", postId);
+  // 게시글의 댓글 수 증가 - RPC 원자적 함수로 처리 (race condition 방지)
+  // 실패해도 댓글 자체는 생성된 상태이므로 로깅만 합니다.
+  const { error: countError } = await supabase.rpc(
+    "increment_comment_count",
+    { p_post_id: postId }
+  );
 
   if (countError) {
     console.error("댓글 수 증가 실패:", countError);

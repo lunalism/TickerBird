@@ -53,87 +53,42 @@ export async function POST(request: Request) {
   const targetType: LikeTargetType = body.target_type;
   const targetId: string = body.target_id;
 
-  // 대상 테이블/카운트 컬럼 결정
+  // 대상 존재 및 삭제 여부 확인 (404 보장)
   const targetTable = targetType === "post" ? "posts" : "comments";
-  const countColumn = "like_count";
-
-  // 대상 존재 및 삭제 여부 확인
   const { data: target, error: targetError } = await supabase
     .from(targetTable)
-    .select(`id, ${countColumn}, is_deleted`)
+    .select("id, is_deleted")
     .eq("id", targetId)
     .single();
 
-  if (targetError || !target || (target as { is_deleted: boolean }).is_deleted) {
+  if (
+    targetError ||
+    !target ||
+    (target as { is_deleted: boolean }).is_deleted
+  ) {
     return Response.json(
       { error: "대상을 찾을 수 없습니다" },
       { status: 404 }
     );
   }
 
-  const currentCount = (target as { like_count: number }).like_count;
+  // 좋아요 토글을 RPC 원자적 함수로 처리 (race condition 방지)
+  // 반환 형태: { liked: boolean, like_count: number }
+  const { data: rpcResult, error: rpcError } = await supabase.rpc(
+    "toggle_like",
+    {
+      p_user_id: user.id,
+      p_target_type: targetType,
+      p_target_id: targetId,
+    }
+  );
 
-  // 기존 좋아요 여부 조회
-  const { data: existing, error: existingError } = await supabase
-    .from("likes")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("target_type", targetType)
-    .eq("target_id", targetId)
-    .maybeSingle();
-
-  if (existingError) {
-    console.error("좋아요 조회 실패:", existingError);
+  if (rpcError || !rpcResult) {
+    console.error("좋아요 토글 실패:", rpcError);
     return Response.json({ error: "처리 실패" }, { status: 500 });
   }
 
-  // 토글 처리
-  if (existing) {
-    // 좋아요 취소: likes DELETE + count - 1
-    const { error: deleteError } = await supabase
-      .from("likes")
-      .delete()
-      .eq("id", existing.id);
-
-    if (deleteError) {
-      console.error("좋아요 취소 실패:", deleteError);
-      return Response.json({ error: "처리 실패" }, { status: 500 });
-    }
-
-    const nextCount = Math.max(0, currentCount - 1);
-    const { error: countError } = await supabase
-      .from(targetTable)
-      .update({ [countColumn]: nextCount })
-      .eq("id", targetId);
-
-    if (countError) {
-      console.error("좋아요 카운트 감소 실패:", countError);
-    }
-
-    return Response.json({ liked: false, like_count: nextCount });
-  }
-
-  // 좋아요 추가: likes INSERT + count + 1
-  const { error: insertError } = await supabase.from("likes").insert({
-    user_id: user.id,
-    target_type: targetType,
-    target_id: targetId,
-  });
-
-  if (insertError) {
-    console.error("좋아요 추가 실패:", insertError);
-    return Response.json({ error: "처리 실패" }, { status: 500 });
-  }
-
-  const nextCount = currentCount + 1;
-  const { error: countError } = await supabase
-    .from(targetTable)
-    .update({ [countColumn]: nextCount })
-    .eq("id", targetId);
-
-  if (countError) {
-    console.error("좋아요 카운트 증가 실패:", countError);
-  }
-
-  return Response.json({ liked: true, like_count: nextCount });
+  return Response.json(
+    rpcResult as { liked: boolean; like_count: number }
+  );
 }

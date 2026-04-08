@@ -144,23 +144,15 @@ export async function DELETE(
     return Response.json({ error: "삭제 실패" }, { status: 500 });
   }
 
-  // 게시글의 댓글 수 감소 (현재 값 조회 후 -1, 0 미만 방지)
-  const { data: post } = await supabase
-    .from("posts")
-    .select("comment_count")
-    .eq("id", existing.post_id)
-    .single();
+  // 게시글의 댓글 수 감소 - RPC 원자적 함수로 처리 (race condition 방지)
+  // 0 미만 방지 및 카운트 갱신은 RPC 내부에서 처리됩니다.
+  const { error: countError } = await supabase.rpc(
+    "decrement_comment_count",
+    { p_post_id: existing.post_id }
+  );
 
-  if (post) {
-    const nextCount = Math.max(0, post.comment_count - 1);
-    const { error: countError } = await supabase
-      .from("posts")
-      .update({ comment_count: nextCount })
-      .eq("id", existing.post_id);
-
-    if (countError) {
-      console.error("댓글 수 감소 실패:", countError);
-    }
+  if (countError) {
+    console.error("댓글 수 감소 실패:", countError);
   }
 
   return Response.json({ success: true });
