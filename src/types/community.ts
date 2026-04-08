@@ -87,12 +87,12 @@ export interface PostBookmark {
   created_at: string;
 }
 
-/** 작성자 요약 정보 (조인 시 사용) */
+/** 작성자 요약 정보 (조인 시 사용 - profiles 테이블 기준) */
 export interface CommunityAuthor {
-  /** 사용자 ID */
+  /** 사용자 ID (profiles.id) */
   id: string;
-  /** 사용자명 */
-  username: string;
+  /** 표시 이름 */
+  display_name: string | null;
   /** 프로필 이미지 URL */
   avatar_url: string | null;
 }
