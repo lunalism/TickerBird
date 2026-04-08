@@ -12,6 +12,12 @@ import type { CommentWithAuthor } from "@/types/community";
 interface CommentSectionProps {
   /** 게시글 ID */
   postId: string;
+  /**
+   * 댓글 작성/삭제로 댓글 수가 변경되었을 때 호출되는 콜백
+   * delta: 작성 시 +1, 삭제 시 -1
+   * 부모 컴포넌트가 게시글 헤더의 comment_count를 동기화하는 용도로 사용합니다.
+   */
+  onCommentCountChange?: (delta: number) => void;
 }
 
 /** 댓글 본문 최대 길이 */
@@ -37,7 +43,10 @@ function formatRelativeTime(dateString: string): string {
   });
 }
 
-export default function CommentSection({ postId }: CommentSectionProps) {
+export default function CommentSection({
+  postId,
+  onCommentCountChange,
+}: CommentSectionProps) {
   const { user, isLoggedIn, isLoading: authLoading } = useAuth();
 
   const [comments, setComments] = useState<CommentWithAuthor[]>([]);
@@ -92,9 +101,10 @@ export default function CommentSection({ postId }: CommentSectionProps) {
         const errBody: { error?: string } = await res.json().catch(() => ({}));
         throw new Error(errBody.error ?? "댓글 작성 실패");
       }
-      // 작성 성공 → 입력창 초기화 + 목록 갱신
+      // 작성 성공 → 입력창 초기화 + 목록 갱신 + 부모 카운트 +1 통지
       setInputContent("");
       await fetchComments();
+      onCommentCountChange?.(1);
     } catch (err) {
       console.error("댓글 작성 실패:", err);
       setSubmitError(
@@ -116,7 +126,9 @@ export default function CommentSection({ postId }: CommentSectionProps) {
         const errBody: { error?: string } = await res.json().catch(() => ({}));
         throw new Error(errBody.error ?? "댓글 삭제 실패");
       }
+      // 삭제 성공 → 목록 갱신 + 부모 카운트 -1 통지
       await fetchComments();
+      onCommentCountChange?.(-1);
     } catch (err) {
       console.error("댓글 삭제 실패:", err);
       window.alert(err instanceof Error ? err.message : "댓글 삭제 실패");

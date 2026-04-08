@@ -117,6 +117,16 @@ export default function CommunityPostDetailPage() {
     };
   }, [post?.content]);
 
+  // 댓글 작성/삭제 후 헤더의 comment_count를 즉시 반영하기 위한 콜백
+  // (delta: 작성 +1 / 삭제 -1, 0 미만 방지)
+  const handleCommentCountChange = (delta: number) => {
+    setPost((prev) =>
+      prev
+        ? { ...prev, comment_count: Math.max(0, prev.comment_count + delta) }
+        : prev
+    );
+  };
+
   // 삭제 처리
   const handleDelete = async () => {
     if (!post) return;
@@ -259,7 +269,10 @@ export default function CommunityPostDetailPage() {
       </div>
 
       {/* 댓글 섹션 */}
-      <CommentSection postId={post.id} />
+      <CommentSection
+        postId={post.id}
+        onCommentCountChange={handleCommentCountChange}
+      />
     </article>
   );
 }
