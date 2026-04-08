@@ -1,6 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+// CSRF 대비: 운영 배포 전 Supabase 세션 쿠키의 SameSite 속성 확인 필요.
+// @supabase/ssr 기본값은 SameSite=Lax이지만, 보안 강화를 위해
+// SameSite=Strict + Secure 적용을 검토해야 합니다.
+// (참고: setAll 콜백의 options에서 sameSite: "strict"로 override 가능)
+
 /**
  * 서버(서버 컴포넌트, API Route)에서 사용할 Supabase 클라이언트를 생성합니다.
  * 서버 컴포넌트나 서버 액션에서 Supabase에 접근할 때 이 함수를 사용하세요.
