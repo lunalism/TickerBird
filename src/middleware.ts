@@ -27,13 +27,17 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/community") ||
     pathname.startsWith("/calendar") ||
     pathname.startsWith("/notifications") ||
-    pathname.startsWith("/profile");
+    pathname.startsWith("/profile") ||
+    pathname.startsWith("/settings");
+
+  // 관리자 경로 (로그인 필수, 관리자 여부는 서버 컴포넌트에서 추가 검증)
+  const isAdminRoute = pathname.startsWith("/admin");
 
   // 로그인 페이지 경로
   const isAuthRoute = pathname.startsWith("/login");
 
   // 비로그인 유저가 보호된 경로에 접근하면 로그인 페이지로 리다이렉트
-  if (isProtectedRoute && !hasSession) {
+  if ((isProtectedRoute || isAdminRoute) && !hasSession) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
