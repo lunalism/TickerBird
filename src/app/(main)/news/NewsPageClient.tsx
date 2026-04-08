@@ -1,17 +1,16 @@
 // 뉴스 페이지 클라이언트 컴포넌트
-// Supabase articles 테이블에서 실제 데이터를 조회합니다.
-// 이전 스타일 UI: 주요뉴스 + 필터 + 리스트
+// 서버에서 받은 초기 데이터를 필터링/렌더링합니다.
+// Supabase 직접 조회 없이 props 기반으로 동작합니다.
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
 } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { createClient } from "@/lib/supabase/client";
 import { useNewsStore } from "@/stores/newsStore";
 import type { Article } from "@/components/news/NewsCard";
 import type { TrumpPost, FeedItem } from "@/lib/news/types";
@@ -123,10 +122,25 @@ function getFeedItemTitle(item: FeedItem): string {
 }
 
 // ──────────────────────────────────────────────
+// Props 타입
+// ──────────────────────────────────────────────
+
+interface NewsPageClientProps {
+  initialArticles: Article[];
+  initialTrumpPosts: TrumpPost[];
+  isLoggedIn: boolean;
+}
+
+// ──────────────────────────────────────────────
 // 메인 컴포넌트
 // ──────────────────────────────────────────────
 
-export default function NewsPageClient() {
+export default function NewsPageClient({
+  initialArticles,
+  initialTrumpPosts,
+  isLoggedIn,
+}: NewsPageClientProps) {
+  const router = useRouter();
   const setSelectedItem = useNewsStore((s) => s.setSelectedItem);
   const setAllItems = useNewsStore((s) => s.setAllItems);
 
@@ -136,111 +150,83 @@ export default function NewsPageClient() {
   const [selectedSource, setSelectedSource] = useState<string>("all");
   // 주요뉴스 섹션 접기/펼치기 상태
   const [isFeaturedOpen, setIsFeaturedOpen] = useState(true);
-  // 피드 아이템 목록 (뉴스 + 트럼프 게시물)
-  const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
-  // 로딩 상태
-  const [isDataLoading, setIsDataLoading] = useState(true);
+  // 새로고침 로딩 상태
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Supabase 세션에서 실제 로그인 상태를 감지합니다
-  const { isLoggedIn, isLoading: isAuthLoading } = useAuth();
+  // 서버에서 받은 데이터를 FeedItem 배열로 변환 (props 변경 시 자동 갱신)
+  const allFeedItems = useMemo(() => {
+    const articleItems: FeedItem[] = initialArticles.map((a) => ({
+      ...a,
+      itemType: "article" as const,
+    }));
+    const trumpItems: FeedItem[] = initialTrumpPosts.map((t) => ({
+      ...t,
+      itemType: "trump" as const,
+    }));
+
+    // 발행시간 기준 정렬 (최신순)
+    return [...articleItems, ...trumpItems].sort(
+      (a, b) =>
+        new Date(getFeedItemTime(b)).getTime() -
+        new Date(getFeedItemTime(a)).getTime()
+    );
+  }, [initialArticles, initialTrumpPosts]);
+
+  // 필터 적용 (클라이언트 사이드)
+  const feedItems = useMemo(() => {
+    let items = allFeedItems;
+
+    // 시장 필터
+    if (selectedMarket === "KR") {
+      items = items.filter(
+        (item) => item.itemType === "article" && item.country === "KR"
+      );
+    } else if (selectedMarket === "US") {
+      items = items.filter(
+        (item) =>
+          item.itemType === "trump" ||
+          (item.itemType === "article" && item.country === "US")
+      );
+    }
+
+    // 출처 필터
+    if (selectedSource !== "all") {
+      if (selectedSource === "Truth Social") {
+        items = items.filter((item) => item.itemType === "trump");
+      } else {
+        items = items.filter(
+          (item) =>
+            item.itemType === "article" && item.source_name === selectedSource
+        );
+      }
+    }
+
+    return items;
+  }, [allFeedItems, selectedMarket, selectedSource]);
+
+  // Zustand store에 피드 아이템 동기화 (모달에서 관련 뉴스 표시용)
+  useEffect(() => {
+    setAllItems(feedItems);
+  }, [feedItems, setAllItems]);
+
+  // props 변경 시 새로고침 완료 처리
+  useEffect(() => {
+    setIsRefreshing(false);
+  }, [initialArticles, initialTrumpPosts]);
 
   // 피드 아이템 클릭 핸들러: Zustand에 저장하여 모달 즉시 표시
   const handleItemClick = (item: FeedItem) => {
     setSelectedItem(item);
   };
 
-  // 기사 + 트럼프 게시물 조회
-  const fetchFeedItems = async () => {
-    setIsDataLoading(true);
-    try {
-      const supabase = createClient();
-      const limit = isLoggedIn ? 50 : 10;
-
-      // 기사 조회
-      let articlesQuery = supabase
-        .from("articles")
-        .select("*")
-        .order("published_at", { ascending: false })
-        .limit(limit);
-
-      // 시장 필터 적용 (Truth Social 선택 시 기사 조회 스킵)
-      if (selectedMarket !== "all") {
-        articlesQuery = articlesQuery.eq("country", selectedMarket);
-      }
-
-      // 출처 필터 적용 (Truth Social 선택 시 기사 조회 스킵)
-      if (selectedSource !== "all" && selectedSource !== "Truth Social") {
-        articlesQuery = articlesQuery.eq("source_name", selectedSource);
-      }
-
-      // 트럼프 게시물 조회
-      const trumpQuery = supabase
-        .from("trump_posts")
-        .select("*")
-        .order("posted_at", { ascending: false })
-        .limit(10);
-
-      // 병렬 조회
-      const shouldFetchArticles = selectedSource !== "Truth Social";
-      const shouldFetchTrump =
-        selectedSource === "all" || selectedSource === "Truth Social";
-
-      const [articlesResult, trumpResult] = await Promise.all([
-        shouldFetchArticles ? articlesQuery : Promise.resolve({ data: [], error: null }),
-        shouldFetchTrump ? trumpQuery : Promise.resolve({ data: [], error: null }),
-      ]);
-
-      if (articlesResult.error) {
-        console.error("기사 조회 실패:", articlesResult.error);
-      }
-      if (trumpResult.error) {
-        console.error("트럼프 게시물 조회 실패:", trumpResult.error);
-      }
-
-      // FeedItem으로 변환 후 합치기
-      const articleItems: FeedItem[] = (articlesResult.data ?? []).map(
-        (a: Article) => ({ ...a, itemType: "article" as const })
-      );
-      const trumpItems: FeedItem[] = (trumpResult.data ?? []).map(
-        (t: TrumpPost) => ({ ...t, itemType: "trump" as const })
-      );
-
-      // 시장 필터 적용 (트럼프 게시물은 US로 분류)
-      let allItems = [...articleItems, ...trumpItems];
-      if (selectedMarket === "KR") {
-        allItems = allItems.filter((item) => item.itemType === "article");
-      }
-
-      // 발행시간 기준 정렬 (최신순)
-      allItems.sort(
-        (a, b) =>
-          new Date(getFeedItemTime(b)).getTime() -
-          new Date(getFeedItemTime(a)).getTime()
-      );
-      setFeedItems(allItems);
-      setAllItems(allItems);
-    } catch (error) {
-      console.error("피드 조회 예외:", error);
-      setFeedItems([]);
-    } finally {
-      setIsDataLoading(false);
-    }
+  // 새로고침 핸들러: 서버 컴포넌트 재실행
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    router.refresh();
   };
-
-  // 인증 로딩 완료 후 피드 조회
-  useEffect(() => {
-    if (!isAuthLoading) {
-      fetchFeedItems();
-    }
-  }, [isAuthLoading, isLoggedIn, selectedMarket, selectedSource]);
 
   // 주요뉴스: 최신 2개
   const featuredNews = feedItems.slice(0, 2);
-  // 전체 리스트
-  const visibleItems = feedItems;
-
-  // 전체 로딩 상태 (인증 + 데이터)
-  const isLoading = isAuthLoading || isDataLoading;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
@@ -264,54 +250,40 @@ export default function NewsPageClient() {
         {/* 주요뉴스 카드 2열 */}
         {isFeaturedOpen && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {isLoading
-              ? Array.from({ length: 2 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="animate-pulse rounded-lg border border-border bg-card p-4"
-                  >
-                    <div className="mb-2 flex items-center gap-2">
-                      <div className="h-4 w-14 rounded bg-muted" />
-                      <div className="h-4 w-10 rounded bg-muted" />
+            {featuredNews.map((news) => {
+              const sourceName = getFeedItemSource(news);
+              const category = getCategoryFromSource(sourceName);
+              return (
+                <button
+                  key={news.id}
+                  onClick={() => handleItemClick(news)}
+                  className="rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-foreground/20"
+                >
+                  {/* 배지 + 시간 */}
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-xs font-medium ${getSourceBadgeStyle(sourceName)}`}
+                      >
+                        {sourceName}
+                      </span>
+                      <span
+                        className={`rounded px-1.5 py-0.5 text-xs font-medium ${category.style}`}
+                      >
+                        {category.label}
+                      </span>
                     </div>
-                    <div className="mb-2 h-5 w-4/5 rounded bg-muted" />
-                    <div className="h-3 w-16 rounded bg-muted" />
+                    <span className="text-xs text-muted-foreground">
+                      {formatRelativeTime(getFeedItemTime(news))}
+                    </span>
                   </div>
-                ))
-              : featuredNews.map((news) => {
-                  const sourceName = getFeedItemSource(news);
-                  const category = getCategoryFromSource(sourceName);
-                  return (
-                    <button
-                      key={news.id}
-                      onClick={() => handleItemClick(news)}
-                      className="rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-foreground/20"
-                    >
-                      {/* 배지 + 시간 */}
-                      <div className="mb-2 flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-xs font-medium ${getSourceBadgeStyle(sourceName)}`}
-                          >
-                            {sourceName}
-                          </span>
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-xs font-medium ${category.style}`}
-                          >
-                            {category.label}
-                          </span>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {formatRelativeTime(getFeedItemTime(news))}
-                        </span>
-                      </div>
-                      {/* 제목 */}
-                      <h3 className="text-sm font-semibold leading-snug text-foreground">
-                        {getFeedItemTitle(news)}
-                      </h3>
-                    </button>
-                  );
-                })}
+                  {/* 제목 */}
+                  <h3 className="text-sm font-semibold leading-snug text-foreground">
+                    {getFeedItemTitle(news)}
+                  </h3>
+                </button>
+              );
+            })}
           </div>
         )}
       </section>
@@ -350,11 +322,11 @@ export default function NewsPageClient() {
               <option>최신순</option>
             </select>
             <button
-              onClick={fetchFeedItems}
+              onClick={handleRefresh}
               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               aria-label="새로고침"
             >
-              <RefreshCw size={16} className={isDataLoading ? "animate-spin" : ""} />
+              <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
@@ -391,20 +363,7 @@ export default function NewsPageClient() {
 
       {/* ── 섹션 3: 뉴스 리스트 ── */}
       <section>
-        {isLoading ? (
-          // 로딩 스켈레톤
-          <div className="divide-y divide-border">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="animate-pulse px-2 py-3">
-                <div className="mb-1 flex items-center gap-2">
-                  <div className="h-4 w-14 rounded bg-muted" />
-                  <div className="h-4 w-10 rounded bg-muted" />
-                </div>
-                <div className="h-4 w-3/4 rounded bg-muted" />
-              </div>
-            ))}
-          </div>
-        ) : visibleItems.length === 0 ? (
+        {feedItems.length === 0 ? (
           // 필터 결과가 없을 때
           <p className="py-12 text-center text-muted-foreground">
             해당 조건에 맞는 뉴스가 없습니다.
@@ -412,7 +371,7 @@ export default function NewsPageClient() {
         ) : (
           <div className="divide-y divide-border">
             {/* 뉴스 + 트럼프 게시물 통합 목록 */}
-            {visibleItems.map((news) => {
+            {feedItems.map((news) => {
               const sourceName = getFeedItemSource(news);
               const category = getCategoryFromSource(sourceName);
               return (
@@ -452,7 +411,7 @@ export default function NewsPageClient() {
             })}
 
             {/* 비로그인 시: 로그인 유도 배너 */}
-            {!isLoggedIn && visibleItems.length >= 10 && (
+            {!isLoggedIn && feedItems.length >= 10 && (
               <div className="flex flex-col items-center justify-center py-8">
                 <p className="mb-3 text-sm font-medium text-foreground">
                   더 많은 뉴스를 보려면 로그인하세요
