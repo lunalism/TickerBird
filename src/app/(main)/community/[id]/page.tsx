@@ -8,6 +8,9 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Eye, MessageSquare, Pencil, Trash2 } from "lucide-react";
+// isomorphic-dompurify는 SSR/CSR 모두에서 동작하여 동적 import가 불필요합니다.
+// (FOUC 방지: hydration 시점에 본문이 빈 상태로 잠시 노출되는 문제 해결)
+import DOMPurify from "isomorphic-dompurify";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import LikeButton from "@/components/community/LikeButton";
@@ -43,9 +46,6 @@ export default function CommunityPostDetailPage() {
   const [post, setPost] = useState<PostWithAuthor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // 본문 sanitize 결과 (브라우저에서만 dompurify를 동적 import 하여 SSR 이슈 회피)
-  const [sanitizedHtml, setSanitizedHtml] = useState<string>("");
 
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -100,22 +100,6 @@ export default function CommunityPostDetailPage() {
   useEffect(() => {
     if (postId) fetchPost();
   }, [postId, fetchPost]);
-
-  // 본문이 갱신되면 dompurify 동적 import 후 sanitize (브라우저 환경 보장)
-  useEffect(() => {
-    if (!post?.content) {
-      setSanitizedHtml("");
-      return;
-    }
-    let cancelled = false;
-    void import("dompurify").then((mod) => {
-      if (cancelled) return;
-      setSanitizedHtml(mod.default.sanitize(post.content));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [post?.content]);
 
   // 댓글 작성/삭제 후 헤더의 comment_count를 즉시 반영하기 위한 콜백
   // (delta: 작성 +1 / 삭제 -1, 0 미만 방지)
@@ -223,8 +207,8 @@ export default function CommunityPostDetailPage() {
       {/* 본문 (sanitized HTML 렌더) */}
       <div
         className="prose prose-sm dark:prose-invert mt-6 max-w-none whitespace-pre-wrap break-words text-sm text-foreground"
-        // sanitizedHtml는 useEffect 안에서 dompurify로 정화된 결과만 들어옵니다.
-        dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+        // isomorphic-dompurify로 매 렌더 시 본문을 정화합니다 (본문 max 500자 → 비용 미미).
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(post.content) }}
       />
 
       {/* 액션 바: 좋아요 + 댓글수 + (본인) 수정/삭제 */}
