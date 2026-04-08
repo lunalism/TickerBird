@@ -42,17 +42,20 @@ export async function GET(request: Request) {
     query = query.ilike("display_name", `%${search}%`);
   }
 
-  const { data: profiles, count, error } = await query;
+  // profiles 조회와 auth.users 이메일 조회를 병렬 실행 (2 RTT → 1 RTT)
+  const [profilesResult, authUsersResult] = await Promise.all([
+    query,
+    supabase.auth.admin.listUsers({ perPage: 1000 }),
+  ]);
+
+  const { data: profiles, count, error } = profilesResult;
 
   if (error) {
     console.error("유저 목록 조회 실패:", error);
     return Response.json({ error: "조회 실패" }, { status: 500 });
   }
 
-  // auth.users에서 이메일 가져오기
-  const {
-    data: { users: authUsers },
-  } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+  const authUsers = authUsersResult.data.users;
 
   // auth 유저 이메일 맵 생성
   const emailMap = new Map<string, string>();
