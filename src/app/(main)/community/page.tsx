@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import PostCard from "@/components/community/PostCard";
 import PostListSkeleton from "@/components/community/PostListSkeleton";
 import InlinePostForm from "@/components/community/InlinePostForm";
+import PostModal from "@/components/community/PostModal";
 import type { PostWithAuthor } from "@/types/community";
 
 /** 한 페이지 당 게시글 수 */
@@ -31,6 +32,9 @@ export default function CommunityPage() {
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 모달에 표시 중인 게시글 (null이면 모달 닫힘)
+  const [selectedPost, setSelectedPost] = useState<PostWithAuthor | null>(null);
 
   // 게시글 목록 조회
   const fetchPosts = useCallback(async (targetPage: number) => {
@@ -70,6 +74,21 @@ export default function CommunityPage() {
     } else {
       fetchPosts(1);
     }
+  };
+
+  // 모달에서 게시글 수정/댓글 카운트 변경 시: 목록의 해당 게시글 동기화
+  const handlePostUpdated = (updated: PostWithAuthor) => {
+    setPosts((prev) =>
+      prev.map((p) => (p.id === updated.id ? updated : p))
+    );
+    // 모달 내부 상태도 동일 객체로 유지
+    setSelectedPost(updated);
+  };
+
+  // 모달에서 게시글 삭제 성공 시: 목록에서 제거 + 총 개수 감소
+  const handlePostDeleted = (postId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    setTotal((prev) => Math.max(0, prev - 1));
   };
 
   // 페이지네이션 계산
@@ -126,7 +145,11 @@ export default function CommunityPage() {
       ) : (
         <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
+            <PostCard
+              key={post.id}
+              post={post}
+              onClick={() => setSelectedPost(post)}
+            />
           ))}
         </ul>
       )}
@@ -164,6 +187,17 @@ export default function CommunityPage() {
             <ChevronRight aria-hidden="true" />
           </Button>
         </nav>
+      )}
+
+      {/* 게시글 상세 모달 */}
+      {selectedPost && (
+        <PostModal
+          post={selectedPost}
+          isOpen={true}
+          onClose={() => setSelectedPost(null)}
+          onPostUpdated={handlePostUpdated}
+          onPostDeleted={handlePostDeleted}
+        />
       )}
     </div>
   );

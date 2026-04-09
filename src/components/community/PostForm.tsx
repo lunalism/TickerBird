@@ -23,6 +23,11 @@ interface PostFormProps {
   isSubmitting: boolean;
   /** 제출 버튼 라벨 (기본: "등록") */
   submitLabel?: string;
+  /**
+   * 취소 버튼 핸들러 (모달 등 라우팅이 부적절한 컨텍스트에서 주입)
+   * 미지정 시 기본 동작: history.back() 또는 /community 로 이동
+   */
+  onCancel?: () => void;
 }
 
 /** 제목 최대 길이 */
@@ -35,6 +40,7 @@ export default function PostForm({
   onSubmit,
   isSubmitting,
   submitLabel = "등록",
+  onCancel,
 }: PostFormProps) {
   const router = useRouter();
   // initialData는 마운트 시점에만 사용 (수정 페이지는 데이터 로딩 후에만 PostForm을 렌더하므로
@@ -74,8 +80,12 @@ export default function PostForm({
     await onSubmit({ title: trimmedTitle, content: trimmedContent });
   };
 
-  // 취소 버튼: 이전 페이지로 이동 (없으면 /community)
+  // 취소 버튼: onCancel이 주입되면 그 콜백, 아니면 이전 페이지로 이동
   const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+      return;
+    }
     if (window.history.length > 1) {
       router.back();
     } else {

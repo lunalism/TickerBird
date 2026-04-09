@@ -1,12 +1,14 @@
 // 커뮤니티 게시글 카드 컴포넌트
 // 목록에서 한 게시글을 카드 형태로 표시합니다.
+// 클릭 시 상세 모달을 여는 onClick 콜백을 부모에서 주입합니다.
 
-import Link from "next/link";
 import { Eye, Heart, MessageSquare, Pin } from "lucide-react";
 import type { PostWithAuthor } from "@/types/community";
 
 interface PostCardProps {
   post: PostWithAuthor;
+  /** 카드 클릭 시 호출 (부모에서 모달 열기) */
+  onClick: () => void;
 }
 
 /**
@@ -34,14 +36,15 @@ function formatRelativeTime(dateString: string): string {
   });
 }
 
-export default function PostCard({ post }: PostCardProps) {
+export default function PostCard({ post, onClick }: PostCardProps) {
   const authorName = post.author.display_name?.trim() || "알 수 없음";
 
   return (
     <li className="transition-colors hover:bg-muted/40">
-      <Link
-        href={`/community/${post.id}`}
-        className="block p-4 outline-none focus-visible:bg-muted/40 sm:p-5"
+      <button
+        type="button"
+        onClick={onClick}
+        className="block w-full p-4 text-left outline-none focus-visible:bg-muted/40 sm:p-5"
       >
         {/* 제목 (고정 글이면 핀 아이콘) */}
         <div className="flex items-start gap-2">
@@ -85,7 +88,7 @@ export default function PostCard({ post }: PostCardProps) {
             </span>
           </div>
         </div>
-      </Link>
+      </button>
     </li>
   );
 }
