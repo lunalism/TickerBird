@@ -237,7 +237,9 @@ export default function CommunityPostDetailPage() {
         {/* 본인 게시글: 수정/삭제 */}
         {isOwner && (
           <div className="ml-auto flex items-center gap-2">
+            {/* type="button" 명시 — 폼 submit 방지 (방어적 코딩) */}
             <Button
+              type="button"
               variant="outline"
               size="sm"
               onClick={() => router.push(`/community/${post.id}/edit`)}
