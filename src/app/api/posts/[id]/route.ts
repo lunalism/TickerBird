@@ -62,9 +62,16 @@ export async function GET(
 
   const row = data as unknown as PostJoinRow;
 
-  // 조회수 증가 (no_view=true 인 경우 건너뜀, 실패해도 응답에는 영향 없음)
+  // 본인 게시글이면 조회수 증가 스킵 (자기 글로 카운트 부풀리기 방지)
+  // 비로그인 유저는 user가 null이라 isOwnPost=false → 기존대로 증가
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isOwnPost = !!user && user.id === row.user_id;
+
+  // 조회수 증가 (no_view=true 또는 본인 게시글인 경우 건너뜀, 실패해도 응답에는 영향 없음)
   let nextViewCount = row.view_count;
-  if (!skipViewCount) {
+  if (!skipViewCount && !isOwnPost) {
     nextViewCount = row.view_count + 1;
     const { error: updateError } = await supabase
       .from("posts")

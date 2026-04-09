@@ -41,7 +41,7 @@ export default function CommunityPostDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const postId = params.id;
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
 
   const [post, setPost] = useState<PostWithAuthor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,8 +79,14 @@ export default function CommunityPostDetailPage() {
       const data: { post: PostWithAuthor } = await res.json();
       setPost(data.post);
 
+      // 본인이 작성한 게시글은 조회수 증가하지 않음
+      // → sessionStorage 마킹을 건너뛰어 다음 진입에서도 조회수 관련 분기를 건드리지 않음
+      // (서버에서도 본인 게시글은 이미 증가를 스킵하므로 이중 안전망)
+      const isOwnPost = !!user && user.id === data.post.user_id;
+
       // 첫 조회 성공 시에만 마킹 (이후 새로고침은 no_view=true 분기)
-      if (!alreadyViewed) {
+      // 단, 본인 게시글이면 마킹 스킵 (애초에 서버에서 카운트되지 않으므로)
+      if (!alreadyViewed && !isOwnPost) {
         try {
           sessionStorage.setItem(storageKey, "true");
         } catch {
@@ -95,11 +101,13 @@ export default function CommunityPostDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [postId]);
+  }, [postId, user]);
 
   useEffect(() => {
+    // 인증 정보가 확정되어야 본인 여부를 정확히 판정 가능 → authLoading 종료 대기
+    if (authLoading) return;
     if (postId) fetchPost();
-  }, [postId, fetchPost]);
+  }, [authLoading, postId, fetchPost]);
 
   // 댓글 작성/삭제 후 헤더의 comment_count를 즉시 반영하기 위한 콜백
   // (delta: 작성 +1 / 삭제 -1, 0 미만 방지)
