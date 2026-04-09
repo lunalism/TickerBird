@@ -246,7 +246,10 @@ export default function CommunityPostDetailPage() {
               <Pencil aria-hidden="true" />
               <span>수정</span>
             </Button>
+            {/* type="button" 명시 — 미지정 시 HTML 기본값이 'submit'이라
+                상위 form 컨텍스트에서 의도치 않은 submit이 발생할 수 있음 */}
             <Button
+              type="button"
               variant="destructive"
               size="sm"
               onClick={handleDelete}
