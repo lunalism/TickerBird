@@ -5,12 +5,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, PenSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import PostCard from "@/components/community/PostCard";
 import PostListSkeleton from "@/components/community/PostListSkeleton";
+import InlinePostForm from "@/components/community/InlinePostForm";
 import type { PostWithAuthor } from "@/types/community";
 
 /** 한 페이지 당 게시글 수 */
@@ -24,7 +24,6 @@ interface PostsResponse {
 }
 
 export default function CommunityPage() {
-  const router = useRouter();
   const { isLoggedIn, isLoading: authLoading } = useAuth();
 
   const [page, setPage] = useState(1);
@@ -63,12 +62,13 @@ export default function CommunityPage() {
     fetchPosts(page);
   }, [page, fetchPosts]);
 
-  // 글쓰기 버튼 클릭: 비로그인 시 /login으로 이동
-  const handleWriteClick = () => {
-    if (isLoggedIn) {
-      router.push("/community/write");
+  // 인라인 폼에서 글 작성 성공 시: 1페이지로 이동 후 목록 갱신
+  // (현재 페이지가 1이면 fetchPosts만 재호출)
+  const handlePostCreated = () => {
+    if (page !== 1) {
+      setPage(1);
     } else {
-      router.push("/login");
+      fetchPosts(1);
     }
   };
 
@@ -79,25 +79,25 @@ export default function CommunityPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-8">
-      {/* 헤더: 타이틀 + 글쓰기 버튼 */}
-      <header className="mb-6 flex items-center justify-between gap-3">
+      {/* 헤더: 타이틀만 (글쓰기 버튼은 인라인 폼으로 대체) */}
+      <header className="mb-6">
         <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
           커뮤니티
         </h1>
-
-        {/* 인증 로딩 중에는 버튼 숨김, 로그인 시에만 표시 */}
-        {!authLoading && isLoggedIn && (
-          <Button
-            variant="default"
-            size="default"
-            onClick={handleWriteClick}
-            aria-label="글쓰기"
-          >
-            <PenSquare aria-hidden="true" />
-            <span>글쓰기</span>
-          </Button>
-        )}
       </header>
+
+      {/* 인라인 작성 폼 (로그인 상태일 때만) / 비로그인 안내 */}
+      {!authLoading && isLoggedIn && (
+        <InlinePostForm onSuccess={handlePostCreated} />
+      )}
+      {!authLoading && !isLoggedIn && (
+        <p className="mb-6 rounded-lg border border-border bg-card p-4 text-center text-sm text-muted-foreground">
+          <Link href="/login" className="text-primary hover:underline">
+            로그인
+          </Link>
+          하고 첫 글을 작성해보세요.
+        </p>
+      )}
 
       {/* 본문: 로딩 / 에러 / 빈 상태 / 목록 */}
       {isLoading ? (
@@ -122,14 +122,6 @@ export default function CommunityPage() {
           <p className="text-sm text-muted-foreground">
             아직 게시글이 없습니다.
           </p>
-          {!authLoading && !isLoggedIn && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              <Link href="/login" className="text-primary hover:underline">
-                로그인
-              </Link>
-              하고 첫 글을 작성해보세요.
-            </p>
-          )}
         </div>
       ) : (
         <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
