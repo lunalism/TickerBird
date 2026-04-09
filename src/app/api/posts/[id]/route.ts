@@ -205,14 +205,14 @@ export async function DELETE(
     return Response.json({ error: "인증이 필요합니다" }, { status: 401 });
   }
 
-  // 게시글 존재 확인
+  // 게시글 존재 확인 (hard delete 전환으로 is_deleted 컬럼 체크 불필요)
   const { data: existing, error: fetchError } = await supabase
     .from("posts")
-    .select("user_id, is_deleted")
+    .select("user_id")
     .eq("id", id)
     .single();
 
-  if (fetchError || !existing || existing.is_deleted) {
+  if (fetchError || !existing) {
     return Response.json(
       { error: "게시글을 찾을 수 없습니다" },
       { status: 404 }
@@ -230,13 +230,10 @@ export async function DELETE(
     }
   }
 
-  // 소프트 삭제
+  // 실제 삭제 (hard delete) — 관련 댓글/좋아요는 DB 외래키 cascade로 정리됨 가정
   const { error } = await supabase
     .from("posts")
-    .update({
-      is_deleted: true,
-      updated_at: new Date().toISOString(),
-    })
+    .delete()
     .eq("id", id);
 
   if (error) {
