@@ -108,8 +108,9 @@ export async function POST(request: Request) {
 
   const title = (body.title ?? "").trim();
   const content = (body.content ?? "").trim();
-  // 카테고리는 선택값이며 미지정 시 'free'로 기본 설정
-  const category = (body.category ?? "free").trim();
+  // 카테고리는 선택값이며 미지정 시 '자유'로 기본 설정
+  // (DB 체크 제약 허용값: '자유', '종목토론', '분석공유', '질문')
+  const category = (body.category ?? "자유").trim();
 
   // 유효성 검사: 제목 1~100자
   if (title.length < 1 || title.length > 100) {

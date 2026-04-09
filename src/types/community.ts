@@ -3,8 +3,8 @@
  * 게시글, 댓글, 좋아요, 북마크 등 커뮤니티 도메인의 TypeScript 타입입니다.
  */
 
-/** 게시글 카테고리 */
-export type PostCategory = string;
+/** 게시글 카테고리 (DB 체크 제약과 일치해야 함) */
+export type PostCategory = "자유" | "종목토론" | "분석공유" | "질문";
 
 /** 좋아요 대상 타입 (게시글 또는 댓글) */
 export type LikeTargetType = "post" | "comment";

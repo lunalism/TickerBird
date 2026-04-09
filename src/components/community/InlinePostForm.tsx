@@ -71,11 +71,12 @@ export default function InlinePostForm({ onSuccess }: InlinePostFormProps) {
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // 카테고리는 인라인 폼에서 받지 않으므로 'free' 기본값으로 전송
+        // 카테고리는 인라인 폼에서 받지 않으므로 '자유' 기본값으로 전송
+        // (DB 체크 제약 허용값: '자유', '종목토론', '분석공유', '질문')
         body: JSON.stringify({
           title: title.trim(),
           content: content.trim(),
-          category: "free",
+          category: "자유",
         }),
       });
 
