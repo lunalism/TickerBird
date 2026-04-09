@@ -230,7 +230,19 @@ export async function DELETE(
     }
   }
 
-  // 실제 삭제 (hard delete) — 관련 댓글/좋아요는 DB 외래키 cascade로 정리됨 가정
+  // 게시글 관련 좋아요 먼저 삭제 (likes는 target_type/target_id polymorphic 구조라 외래키 CASCADE 불가)
+  const { error: likesError } = await supabase
+    .from("likes")
+    .delete()
+    .eq("target_type", "post")
+    .eq("target_id", id);
+
+  if (likesError) {
+    console.error("좋아요 삭제 실패:", likesError);
+    return Response.json({ error: "삭제 실패" }, { status: 500 });
+  }
+
+  // 게시글 실제 삭제 (hard delete) — 댓글은 DB 외래키 cascade로 정리됨 가정
   const { error } = await supabase
     .from("posts")
     .delete()
