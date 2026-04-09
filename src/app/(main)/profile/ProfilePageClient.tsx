@@ -25,7 +25,8 @@ import { createClient } from "@/lib/supabase/client";
 // 프로필 테이블 데이터 타입
 interface Profile {
   display_name: string | null;
-  avatar_url: string | null;
+  // profiles 테이블의 실제 컬럼명은 avatar
+  avatar: string | null;
   tier: string;
   created_at: string;
 }
@@ -107,14 +108,14 @@ export default function ProfilePageClient() {
       // 프로필 데이터 조회
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("display_name, avatar_url, tier, created_at")
+        .select("display_name, avatar, tier, created_at")
         .eq("id", user.id)
         .single();
 
       // profiles 테이블 데이터 설정 (없으면 기본값, 닉네임은 useAuth에서 관리)
       setProfile(profileData ?? {
         display_name: null,
-        avatar_url: null,
+        avatar: null,
         tier: "free",
         created_at: user.created_at,
       });

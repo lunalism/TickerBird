@@ -21,7 +21,8 @@ interface AdminUser {
   id: string;
   display_name: string | null;
   email: string;
-  avatar_url: string | null;
+  // profiles 테이블의 실제 컬럼명은 avatar
+  avatar: string | null;
   is_admin: boolean;
   tier: string;
   created_at: string;
@@ -180,9 +181,9 @@ export default function UsersPageClient() {
               >
                 {/* 아바타 */}
                 <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-muted">
-                  {user.avatar_url ? (
+                  {user.avatar ? (
                     <Image
-                      src={user.avatar_url}
+                      src={user.avatar}
                       alt={`${user.display_name || "사용자"} 프로필 사진`}
                       width={36}
                       height={36}

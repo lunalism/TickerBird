@@ -11,8 +11,8 @@ export interface Profile {
   email: string;
   /** 표시 이름 */
   display_name: string | null;
-  /** 프로필 이미지 URL */
-  avatar_url: string | null;
+  /** 프로필 이미지 URL (profiles 테이블의 avatar 컬럼) */
+  avatar: string | null;
   /** 사용자 역할 (일반 사용자, 관리자 등) */
   role: "user" | "admin";
   /** 생성 일시 */

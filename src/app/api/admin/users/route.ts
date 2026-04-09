@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   // profiles 조회 (검색 + 페이지네이션)
   let query = supabase
     .from("profiles")
-    .select("id, display_name, avatar_url, is_admin, tier, created_at", {
+    .select("id, display_name, avatar, is_admin, tier, created_at", {
       count: "exact",
     })
     .order("created_at", { ascending: false })
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
     // 전체 profiles에서 이메일 기준 재검색
     const { data: allProfiles } = await supabase
       .from("profiles")
-      .select("id, display_name, avatar_url, is_admin, tier, created_at")
+      .select("id, display_name, avatar, is_admin, tier, created_at")
       .order("created_at", { ascending: false });
 
     filteredUsers = (allProfiles ?? [])
