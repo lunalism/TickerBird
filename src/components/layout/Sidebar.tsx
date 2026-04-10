@@ -11,6 +11,7 @@ import {
   FileText,
   MessageSquare,
   Calendar,
+  BookOpen,
   Bell,
   ChevronsLeft,
   ChevronsRight,
@@ -22,11 +23,13 @@ import { useUIStore } from "@/stores/uiStore";
 import { useAuth } from "@/hooks/useAuth";
 
 // 메뉴 아이템 목록 정의 (내 정보는 하단 프로필 영역에서 접근)
+// 캘린더 아래에 용어사전을 배치합니다.
 const menuItems = [
   { label: "뉴스", icon: Globe, href: "/news" },
   { label: "리포트", icon: FileText, href: "/reports" },
   { label: "커뮤니티", icon: MessageSquare, href: "/community" },
   { label: "캘린더", icon: Calendar, href: "/calendar" },
+  { label: "용어사전", icon: BookOpen, href: "/glossary" },
   { label: "알림", icon: Bell, href: "/notifications" },
 ] as const;
 

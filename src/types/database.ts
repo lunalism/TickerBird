@@ -210,3 +210,19 @@ export interface InterestKeyword {
   /** 생성 일시 */
   created_at: string;
 }
+
+/** 경제 용어집 (glossary 테이블) */
+export interface GlossaryTerm {
+  /** 용어 식별자 (영문 또는 한글 키, 예: "CPI", "신규실업수당청구") */
+  id: string;
+  /** 한글 풀네임 (예: "CPI 소비자물가지수") */
+  term: string;
+  /** 영문 풀네임 (예: "Consumer Price Index") */
+  term_en: string;
+  /** 한글 설명 (1~2 문장) */
+  definition: string;
+  /** 분류 (물가/고용/성장/통화정책/소비/경기/무역/부동산/외환) */
+  category: string;
+  /** 생성 일시 */
+  created_at: string;
+}
