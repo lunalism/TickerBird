@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
+import TermTooltip from "@/components/common/TermTooltip";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CalendarEvent } from "@/types/calendar";
@@ -340,13 +341,16 @@ export default function CalendarClient() {
                       {importanceLabel(ev.importance)}
                     </span>
 
-                    {/* 국기 + 지표명 (현재는 미국만) */}
+                    {/* 국기 + 지표명 (현재는 미국만)
+                        지표명은 TermTooltip으로 감싸 호버 시 용어사전 설명을 노출합니다. */}
                     <span className="text-base" aria-label="미국">
                       🇺🇸
                     </span>
-                    <span className="text-sm font-medium text-foreground">
-                      {ev.title}
-                    </span>
+                    <TermTooltip releaseId={ev.releaseId}>
+                      <span className="cursor-help text-sm font-medium text-foreground underline decoration-dotted decoration-muted-foreground/60 underline-offset-4">
+                        {ev.title}
+                      </span>
+                    </TermTooltip>
                   </li>
                 ))}
               </ul>
