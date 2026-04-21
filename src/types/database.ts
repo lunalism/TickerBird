@@ -223,6 +223,11 @@ export interface GlossaryTerm {
   definition: string;
   /** 분류 (물가/고용/성장/통화정책/소비/경기/무역/부동산/외환) */
   category: string;
+  /**
+   * 관련 국가 ISO 3166-1 alpha-2 코드 배열 (예: ["US"], ["US", "KR"]).
+   * Postgres TEXT[] 컬럼과 매핑되며, 미정의/빈 배열은 국기 미표시로 처리.
+   */
+  countries?: string[];
   /** 생성 일시 */
   created_at: string;
 }
