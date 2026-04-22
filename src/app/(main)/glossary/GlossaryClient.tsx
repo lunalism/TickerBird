@@ -9,7 +9,6 @@ import { Search } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import { COUNTRY_NAMES, countryCodeToFlag } from "@/lib/country";
 import type { GlossaryTerm } from "@/types/database";
 
 /** 카테고리 탭 라벨 (요청 사양 그대로) */
@@ -75,7 +74,7 @@ export default function GlossaryClient() {
         const supabase = createClient();
         const { data, error: dbError } = await supabase
           .from("glossary")
-          .select("id, term, term_en, definition, category, countries, created_at")
+          .select("id, term, term_en, definition, category, created_at")
           .order("category", { ascending: true })
           .order("term", { ascending: true });
 
@@ -222,30 +221,8 @@ export default function GlossaryClient() {
                 {t.term_en}
               </div>
 
-              {/* 한국어명 (작게) + 관련 국가 국기 이모지 */}
-              <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-                <span>{t.term}</span>
-                {/*
-                  countries 배열을 순회해 국기 이모지 나란히 표시.
-                  - 빈 배열/undefined는 렌더링하지 않음 (fallback 없음).
-                  - title 속성으로 한국어 국가명 제공 (접근성 + 호버 텍스트).
-                  - text-base로 본문(text-sm)보다 약간 크게 하여 가독성 확보.
-                */}
-                {(t.countries ?? []).map((code) => {
-                  const flag = countryCodeToFlag(code);
-                  if (!flag) return null;
-                  return (
-                    <span
-                      key={code}
-                      title={COUNTRY_NAMES[code] ?? code}
-                      aria-label={COUNTRY_NAMES[code] ?? code}
-                      className="text-base leading-none"
-                    >
-                      {flag}
-                    </span>
-                  );
-                })}
-              </div>
+              {/* 한국어명 (작게) */}
+              <div className="text-sm text-muted-foreground">{t.term}</div>
 
               {/* 설명 */}
               <p className="mt-1 text-sm leading-relaxed text-foreground/80">
