@@ -73,7 +73,7 @@ export default function RootLayout({
     // 이 속성은 <html> 자신과 직계 자식 텍스트에만 적용되며,
     // <body> 내부의 실제 hydration 버그는 여전히 감지된다.
     <html
-      lang="en"
+      lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
