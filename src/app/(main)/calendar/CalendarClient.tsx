@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { CalendarDBTerm, CalendarEvent } from "@/types/calendar";
 
@@ -90,9 +91,6 @@ function importanceLabel(importance: CalendarEvent["importance"]): string {
 export default function CalendarClient({
   termsByReleaseId,
 }: CalendarClientProps) {
-  // 다음 커밋(3c) 에서 지표 클릭 핸들러 구현 시 사용 예정.
-  void termsByReleaseId;
-
   // 현재 표시 중인 연/월 (오늘 날짜로 초기화)
   const today = useMemo(() => new Date(), []);
   const [year, setYear] = useState<number>(today.getFullYear());
@@ -115,6 +113,10 @@ export default function CalendarClient({
   };
   const [fetched, setFetched] = useState<FetchResult | null>(null);
   const [errorState, setErrorState] = useState<FetchError | null>(null);
+
+  // 클릭된 지표의 용어 정보. null 이면 모달 닫힘 상태.
+  // 3c 커밋에서 추가 — 캘린더 이벤트 클릭 → 용어 모달 표시에 사용.
+  const [selectedTerm, setSelectedTerm] = useState<CalendarDBTerm | null>(null);
 
   // 현재 표시 중인 키 (year-month) — 파생 상태 비교용
   const currentKey = `${year}-${month}`;
@@ -335,39 +337,103 @@ export default function CalendarClient({
               </div>
             ) : (
               <ul className="space-y-2">
-                {selectedEvents.map((ev) => (
-                  <li
-                    key={`${ev.releaseId}-${ev.date}`}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 shadow-sm"
-                  >
-                    {/* 중요도 배지 */}
-                    <span
-                      className={cn(
-                        "inline-flex h-6 shrink-0 items-center rounded-full px-2 text-[11px] font-semibold",
-                        ev.importance === "high"
-                          ? "bg-red-500/15 text-red-600 dark:text-red-400"
-                          : ev.importance === "medium"
-                            ? "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400"
-                            : "bg-gray-500/15 text-gray-600 dark:text-gray-400"
-                      )}
-                    >
-                      {importanceLabel(ev.importance)}
-                    </span>
+                {selectedEvents.map((ev) => {
+                  // 해당 release_id 에 매칭되는 용어를 DB 맵에서 조회
+                  const term = termsByReleaseId[ev.releaseId];
+                  const baseClass =
+                    "flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left shadow-sm";
 
-                    {/* 국기 + 지표명 (현재는 미국만) */}
-                    <span className="text-base" aria-label="미국">
-                      🇺🇸
-                    </span>
-                    <span className="text-sm font-medium text-foreground">
-                      {ev.title}
-                    </span>
-                  </li>
-                ))}
+                  // 중요도 배지 / 국기 / 지표명 — button/div 양쪽에서 공통 사용
+                  const inner = (
+                    <>
+                      {/* 중요도 배지 */}
+                      <span
+                        className={cn(
+                          "inline-flex h-6 shrink-0 items-center rounded-full px-2 text-[11px] font-semibold",
+                          ev.importance === "high"
+                            ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                            : ev.importance === "medium"
+                              ? "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400"
+                              : "bg-gray-500/15 text-gray-600 dark:text-gray-400"
+                        )}
+                      >
+                        {importanceLabel(ev.importance)}
+                      </span>
+
+                      {/* 국기 + 지표명 (현재는 미국만) */}
+                      <span className="text-base" aria-label="미국">
+                        🇺🇸
+                      </span>
+                      <span className="text-sm font-medium text-foreground">
+                        {ev.title}
+                      </span>
+                    </>
+                  );
+
+                  return (
+                    <li key={`${ev.releaseId}-${ev.date}`}>
+                      {term ? (
+                        // 용어 정보가 있으면 클릭 가능한 버튼으로 렌더
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTerm(term)}
+                          className={cn(
+                            baseClass,
+                            "cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          )}
+                          aria-label={`${ev.title} 용어 정보 보기`}
+                        >
+                          {inner}
+                        </button>
+                      ) : (
+                        // 용어 정보가 없으면 기존처럼 non-interactive 로 렌더
+                        <div className={baseClass}>{inner}</div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </>
         )}
       </div>
+
+      {/* 지표 클릭 시 열리는 용어 정보 모달 */}
+      <Dialog
+        open={selectedTerm !== null}
+        onOpenChange={(open) => {
+          // ESC, 오버레이 클릭, X 버튼 모두 여기로 들어옴
+          if (!open) setSelectedTerm(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          {selectedTerm && (
+            <div className="flex flex-col gap-3">
+              {/* 카테고리 배지 */}
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                  {selectedTerm.category}
+                </span>
+              </div>
+
+              {/* 한글 제목 (DialogTitle) */}
+              <DialogTitle className="text-lg font-semibold">
+                {selectedTerm.term}
+              </DialogTitle>
+
+              {/* 영문명 */}
+              <p className="text-sm text-muted-foreground">
+                {selectedTerm.term_en}
+              </p>
+
+              {/* 설명 */}
+              <p className="mt-2 text-sm leading-relaxed text-foreground">
+                {selectedTerm.definition}
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
