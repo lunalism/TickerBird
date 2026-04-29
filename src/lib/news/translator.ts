@@ -1,13 +1,10 @@
-// Claude API를 사용한 뉴스 번역 및 요약 생성
-// claude-haiku-4-5 모델을 사용하여 비용을 최적화합니다.
+// Gemini 2.5 Flash 를 사용한 한/영 뉴스 번역 및 요약 모듈
+// REST API 직접 호출로 외부 SDK 의존성을 최소화합니다.
 
-import Anthropic from "@anthropic-ai/sdk";
 import type { RawArticle, TranslatedArticle, RawTrumpPost } from "./types";
 
-const MODEL = "claude-haiku-4-5-20251001";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const BATCH_SIZE = 5;
-
-const client = new Anthropic();
 
 // 영어 기사용 프롬프트
 const EN_PROMPT = `다음 영어 뉴스 기사 제목들을 처리해줘.
@@ -27,6 +24,53 @@ const KR_PROMPT = `다음 한국어 뉴스 기사 제목들을 처리해줘.
 - summary_en: 3줄 요약 (영어, 각 줄은 \\n으로 구분)
 JSON 배열만 반환하고 다른 텍스트는 포함하지 마.`;
 
+// 트럼프 게시물 번역/요약 프롬프트
+const TRUMP_PROMPT = `다음 트럼프 Truth Social 게시물을 처리해줘.
+각 게시물에 대해 JSON 배열로 응답해줘.
+- content_ko: 자연스러운 한국어 번역
+- summary_ko: 한국 투자자 관점의 시장 영향 3줄 요약 (한국어, \\n 구분)
+JSON 배열만 반환하고 다른 텍스트는 포함하지 마.`;
+
+/**
+ * Gemini 2.5 Flash 호출 헬퍼.
+ * 무료 티어: 15 RPM / 1000 RPD / 250K TPM
+ * Tickerbird 사용량 (일 48 회) 은 무료 한도의 5% 수준.
+ * REST API 직접 호출로 의존성을 최소화합니다.
+ */
+async function callGemini(prompt: string): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY 환경변수가 설정되지 않았습니다");
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.3, // 번역 일관성을 위해 낮게 설정
+        maxOutputTokens: 4096, // 기존 Anthropic max_tokens 와 동일
+        responseMimeType: "application/json", // 순수 JSON 만 반환하도록 강제
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API 오류: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text || typeof text !== "string") {
+    throw new Error("Gemini 응답에서 텍스트를 추출하지 못했습니다");
+  }
+  return text;
+}
+
 /** 기사 배열을 BATCH_SIZE씩 나눕니다 */
 function chunk<T>(arr: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -36,7 +80,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
-/** 단일 배치를 Claude로 번역/요약합니다 */
+/** 단일 배치를 Gemini로 번역/요약합니다 */
 async function translateBatch(
   articles: RawArticle[],
   country: "KR" | "US"
@@ -48,23 +92,11 @@ async function translateBatch(
     .map((a, i) => `${i + 1}. ${a.title}`)
     .join("\n");
 
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: `${prompt}\n\n${titlesText}`,
-      },
-    ],
-  });
+  // Gemini 2.5 Flash 로 번역 호출
+  const rawText = await callGemini(`${prompt}\n\n${titlesText}`);
 
-  // 응답에서 텍스트 추출
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-
-  // JSON 배열 파싱 (마크다운 코드블록 제거)
-  const jsonStr = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  // JSON 배열 파싱 (responseMimeType=application/json 이지만 안전망으로 마크다운 코드블록 제거 유지)
+  const jsonStr = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
   const parsed: Array<{
     title_ko: string;
     summary_ko: string;
@@ -85,14 +117,7 @@ async function translateBatch(
   }));
 }
 
-// 트럼프 게시물 번역/요약 프롬프트
-const TRUMP_PROMPT = `다음 트럼프 Truth Social 게시물을 처리해줘.
-각 게시물에 대해 JSON 배열로 응답해줘.
-- content_ko: 자연스러운 한국어 번역
-- summary_ko: 한국 투자자 관점의 시장 영향 3줄 요약 (한국어, \\n 구분)
-JSON 배열만 반환하고 다른 텍스트는 포함하지 마.`;
-
-/** 트럼프 게시물 배치를 Claude로 번역/요약합니다 */
+/** 트럼프 게시물 배치를 Gemini로 번역/요약합니다 */
 async function translateTrumpBatch(
   posts: RawTrumpPost[]
 ): Promise<Array<{ post_id: string; content_ko: string; summary_ko: string }>> {
@@ -100,20 +125,10 @@ async function translateTrumpBatch(
     .map((p, i) => `${i + 1}. ${p.content}`)
     .join("\n");
 
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 4096,
-    messages: [
-      {
-        role: "user",
-        content: `${TRUMP_PROMPT}\n\n${contentsText}`,
-      },
-    ],
-  });
+  // Gemini 2.5 Flash 로 번역 호출
+  const rawText = await callGemini(`${TRUMP_PROMPT}\n\n${contentsText}`);
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-  const jsonStr = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  const jsonStr = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
   const parsed: Array<{ content_ko: string; summary_ko: string }> =
     JSON.parse(jsonStr);
 

@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { fetchRssFeeds } from "@/lib/news/rss-parser";
 import { fetchNaverNews } from "@/lib/news/naver-news";
 import { fetchTrumpPosts } from "@/lib/news/trump-posts";
-import { translateArticles, translateTrumpPosts } from "@/lib/news/claude-translator";
+import { translateArticles, translateTrumpPosts } from "@/lib/news/translator";
 import type { RawArticle, TranslatedArticle } from "@/lib/news/types";
 
 // 수집 결과 타입
